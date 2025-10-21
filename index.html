@@ -1,102 +1,126 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Family Budget</title>
+  <link rel="stylesheet" href="styles.css"/>
 
-  <!-- Link to styles and manifest -->
-  <link rel="stylesheet" href="styles.css" />
-  <link rel="manifest" href="manifest.json" />
-  <meta name="theme-color" content="#06b6d4" />
-  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <!-- Chart.js for the per-day chart -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
   <header class="topbar">
     <h1>Family Budget</h1>
-    <button id="installBtn" class="ghost" hidden>Install</button>
+
+    <div class="monthbar">
+      <label for="monthPicker">Month</label>
+      <input type="month" id="monthPicker"/>
+      <button id="btnToday" class="ghost" title="Set date to today">Today</button>
+    </div>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="overview">Overview</button>
+      <button class="tab" data-tab="income">Income</button>
+      <button class="tab" data-tab="expenses">Expenses</button>
+    </nav>
   </header>
 
-  <main class="wrap">
-    <!-- ===== Month Selector & Summary ===== -->
-    <section class="card">
-      <form id="monthForm" autocomplete="off">
-        <label for="monthPicker">Month</label>
-        <input type="month" id="monthPicker" name="monthPicker" />
-        <button type="button" id="resetMonth" class="ghost">Today</button>
-      </form>
-
+  <main>
+    <!-- ============= OVERVIEW ============= -->
+    <section id="tab-overview" class="tabpanel active">
       <div class="stats">
-        <div class="stat">
-          <div class="label">Income</div>
-          <div class="value green" id="sumIncome">€0,00</div>
-        </div>
-        <div class="stat">
-          <div class="label">Expenses</div>
-          <div class="value red" id="sumExpense">€0,00</div>
-        </div>
-        <div class="stat">
-          <div class="label">Balance</div>
-          <div class="value" id="sumBalance">€0,00</div>
-        </div>
+        <div class="stat"><div class="label">Income</div><div id="sumIncome" class="value green">€ 0,00</div></div>
+        <div class="stat"><div class="label">Expenses</div><div id="sumExpense" class="value red">€ 0,00</div></div>
+        <div class="stat"><div class="label">Balance</div><div id="sumBalance" class="value">€ 0,00</div></div>
       </div>
+
+      <h2>Monthly Graph</h2>
+      <canvas id="monthChart" height="140"></canvas>
+
+      <h2>Transactions</h2>
+      <ul id="txList" class="txlist"></ul>
     </section>
 
-    <!-- ===== Add / Edit Transaction ===== -->
-    <section class="card">
-      <h2>Add / Edit Transaction</h2>
-      <form id="txForm" autocomplete="off">
+    <!-- ============= INCOME ============= -->
+    <section id="tab-income" class="tabpanel">
+      <h2>Income</h2>
+
+      <div class="catbar">
+        <div id="incomeCats" class="cats"></div>
+        <button id="btnAddIncomeCat" class="small">+ New</button>
+      </div>
+
+      <form id="formIncome" class="card">
+        <input type="hidden" name="type" value="income"/>
         <div class="row">
-          <label for="txType">Type</label>
-          <select id="txType">
-            <option value="expense">Expense</option>
-            <option value="income">Income</option>
-          </select>
+          <label>Date</label>
+          <input type="date" name="date" required/>
         </div>
 
         <div class="row">
-          <label for="txDate">Date</label>
-          <input type="date" id="txDate" required />
+          <label>Category</label>
+          <input type="text" name="category" list="incomeCatDatalist" placeholder="Pick or type" required/>
+          <datalist id="incomeCatDatalist"></datalist>
         </div>
 
         <div class="row">
-          <label for="txCategory">Category</label>
-          <select id="txCategory"></select>
+          <label>Amount</label>
+          <input type="number" name="amount" step="0.01" inputmode="decimal" placeholder="e.g. 123.45" required/>
         </div>
 
         <div class="row">
-          <label for="txAmount">Amount</label>
-          <input type="number" id="txAmount" step="0.01" placeholder="e.g. 12.34" required />
+          <label>Note <span class="muted">(optional)</span></label>
+          <input type="text" name="note"/>
         </div>
 
-        <div class="row">
-          <label for="txNote">Note</label>
-          <input type="text" id="txNote" placeholder="Optional" />
-        </div>
-
-        <div class="row">
-          <button class="primary" type="submit">Add</button>
-          <button id="clearForm" class="ghost" type="button">Clear</button>
+        <div class="btnrow">
+          <button type="submit" class="primary">Add</button>
+          <button type="button" id="clearIncomeForm" class="ghost">Clear</button>
         </div>
       </form>
     </section>
 
-    <!-- ===== Category Manager ===== -->
-    <section class="card">
-      <h2>Categories</h2>
-      <form id="catForm" class="row compact">
-        <select id="catType">
-          <option value="expense">Expense</option>
-          <option value="income">Income</option>
-        </select>
-        <input type="text" id="catName" placeholder="New category name" required />
-        <button type="submit" class="secondary">Add</button>
+    <!-- ============= EXPENSES ============= -->
+    <section id="tab-expenses" class="tabpanel">
+      <h2>Expenses</h2>
+
+      <div class="catbar">
+        <div id="expenseCats" class="cats"></div>
+        <button id="btnAddExpenseCat" class="small">+ New</button>
+      </div>
+
+      <form id="formExpense" class="card">
+        <input type="hidden" name="type" value="expense"/>
+        <div class="row">
+          <label>Date</label>
+          <input type="date" name="date" required/>
+        </div>
+
+        <div class="row">
+          <label>Category</label>
+          <input type="text" name="category" list="expenseCatDatalist" placeholder="Pick or type" required/>
+          <datalist id="expenseCatDatalist"></datalist>
+        </div>
+
+        <div class="row">
+          <label>Amount</label>
+          <input type="number" name="amount" step="0.01" inputmode="decimal" placeholder="e.g. 12.34" required/>
+        </div>
+
+        <div class="row">
+          <label>Note <span class="muted">(optional)</span></label>
+          <input type="text" name="note"/>
+        </div>
+
+        <div class="btnrow">
+          <button type="submit" class="primary">Add</button>
+          <button type="button" id="clearExpenseForm" class="ghost">Clear</button>
+        </div>
       </form>
-      <div id="catList"></div>
     </section>
   </main>
 
-  <!-- JavaScript -->
   <script src="app.js"></script>
 </body>
 </html>
