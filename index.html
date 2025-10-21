@@ -1,14 +1,102 @@
-<!DOCTYPE html>\
-<html lang="en">\
-<head>\
-  <meta charset="utf-8" />\
-  <meta name="viewport" content="width=device-width, initial-scale=1" />\
-  <link rel="stylesheet" href="styles.css" />\
-  <title>Family Budget</title>\
-</head>\
-<body>\
-  <!-- your app here -->\
-  <script src="app.js"></script>\
-</body>\
-</html>\
-}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Family Budget</title>
+
+  <!-- Link to styles and manifest -->
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#06b6d4" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>Family Budget</h1>
+    <button id="installBtn" class="ghost" hidden>Install</button>
+  </header>
+
+  <main class="wrap">
+    <!-- ===== Month Selector & Summary ===== -->
+    <section class="card">
+      <form id="monthForm" autocomplete="off">
+        <label for="monthPicker">Month</label>
+        <input type="month" id="monthPicker" name="monthPicker" />
+        <button type="button" id="resetMonth" class="ghost">Today</button>
+      </form>
+
+      <div class="stats">
+        <div class="stat">
+          <div class="label">Income</div>
+          <div class="value green" id="sumIncome">€0,00</div>
+        </div>
+        <div class="stat">
+          <div class="label">Expenses</div>
+          <div class="value red" id="sumExpense">€0,00</div>
+        </div>
+        <div class="stat">
+          <div class="label">Balance</div>
+          <div class="value" id="sumBalance">€0,00</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Add / Edit Transaction ===== -->
+    <section class="card">
+      <h2>Add / Edit Transaction</h2>
+      <form id="txForm" autocomplete="off">
+        <div class="row">
+          <label for="txType">Type</label>
+          <select id="txType">
+            <option value="expense">Expense</option>
+            <option value="income">Income</option>
+          </select>
+        </div>
+
+        <div class="row">
+          <label for="txDate">Date</label>
+          <input type="date" id="txDate" required />
+        </div>
+
+        <div class="row">
+          <label for="txCategory">Category</label>
+          <select id="txCategory"></select>
+        </div>
+
+        <div class="row">
+          <label for="txAmount">Amount</label>
+          <input type="number" id="txAmount" step="0.01" placeholder="e.g. 12.34" required />
+        </div>
+
+        <div class="row">
+          <label for="txNote">Note</label>
+          <input type="text" id="txNote" placeholder="Optional" />
+        </div>
+
+        <div class="row">
+          <button class="primary" type="submit">Add</button>
+          <button id="clearForm" class="ghost" type="button">Clear</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- ===== Category Manager ===== -->
+    <section class="card">
+      <h2>Categories</h2>
+      <form id="catForm" class="row compact">
+        <select id="catType">
+          <option value="expense">Expense</option>
+          <option value="income">Income</option>
+        </select>
+        <input type="text" id="catName" placeholder="New category name" required />
+        <button type="submit" class="secondary">Add</button>
+      </form>
+      <div id="catList"></div>
+    </section>
+  </main>
+
+  <!-- JavaScript -->
+  <script src="app.js"></script>
+</body>
+</html>
