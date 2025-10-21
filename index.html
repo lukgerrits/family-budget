@@ -10,13 +10,17 @@
 
   <style>
     body { margin:0; font-family:-apple-system, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
-    header { border-bottom:1px solid #e5e7eb; padding:12px 16px; }
+    header {
+      position: sticky; top: 0; background:#fff;
+      border-bottom:1px solid #e5e7eb; padding:12px 16px; z-index:1000;
+    }
     .topline { display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
     .monthbar { display:flex; gap:8px; align-items:center; }
     nav.tabs { display:flex; gap:8px; margin-top:10px; border-bottom:1px solid #e5e7eb; padding-bottom:6px; }
     nav.tabs button { padding:8px 12px; border:1px solid #e5e7eb; background:#f8fafc; border-radius:8px 8px 0 0; cursor:pointer; }
     nav.tabs button.active { background:#fff; border-bottom-color:#fff; font-weight:600; }
-    main { padding:14px 16px; }
+
+    main { padding:14px 16px; position:relative; }
     section.tabpanel { display:none; }
     section.tabpanel.active { display:block; }
 
@@ -40,7 +44,6 @@
 
     .badge { display:inline-block; padding:4px 8px; border:1px solid #e5e7eb; border-radius:999px; background:#f8fafc; font-size:0.9rem; }
 
-    /* Category chips */
     .chipbar { display:flex; flex-wrap:wrap; gap:8px; }
     .chip {
       padding:6px 10px; border:1px solid #e5e7eb; border-radius:999px;
@@ -70,7 +73,7 @@
   </header>
 
   <main>
-    <!-- ============== OVERVIEW (no transaction list here) ============== -->
+    <!-- ================= OVERVIEW (no transaction list, no form) ================= -->
     <section id="tab-overview" class="tabpanel active">
       <div class="stats">
         <div class="stat">
@@ -88,10 +91,10 @@
       </div>
 
       <h2 style="margin:12px 0 8px;">Monthly Graph</h2>
-      <canvas id="monthChart" height="140"></canvas>
+      <canvas id="monthChart" height="140" style="display:block;"></canvas>
     </section>
 
-    <!-- ============== INCOME ============== -->
+    <!-- ================= INCOME ================= -->
     <section id="tab-income" class="tabpanel">
       <h2 style="margin:0 0 10px;">Income</h2>
       <table class="list">
@@ -115,7 +118,7 @@
       </table>
     </section>
 
-    <!-- ============== EXPENSES ============== -->
+    <!-- ================= EXPENSES ================= -->
     <section id="tab-expenses" class="tabpanel">
       <h2 style="margin:0 0 10px;">Expenses</h2>
       <table class="list">
@@ -139,8 +142,8 @@
       </table>
     </section>
 
-    <!-- ============== ADD / EDIT FORM ============== -->
-    <section class="card">
+    <!-- ================= SHARED ADD / EDIT FORM (hidden on Overview) ================= -->
+    <section id="formCard" class="card" style="display:none;">
       <h2 style="margin:0 0 10px;">Add / Edit Transaction <span id="formTypeBadge" class="badge"></span></h2>
 
       <div class="row">
@@ -175,7 +178,7 @@
     </section>
   </main>
 
-  <!-- Tabs & activation hook -->
+  <!-- Tabs activation hook -->
   <script>
     (function(){
       const tabs = Array.from(document.querySelectorAll('nav.tabs .tab'));
