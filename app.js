@@ -1,8 +1,8 @@
 /* ==========================================================
    Family Budget – app.js
-   - Tab-driven type
+   - Header is sticky; month input always clickable
+   - Form hidden on Overview, visible on Income/Expenses
    - Category chips with + New
-   - No transaction list on Overview
    ========================================================== */
 
 const $ = (s) => document.querySelector(s);
@@ -26,25 +26,15 @@ function load(){
       transactions: [],
       categories: { Income: ['Salary'], Expense: ['Groceries','Rent','Utilities'] }
     };
-    if(!raw) {
-      return base;
-    }
+    if(!raw) return base;
     const p=JSON.parse(raw);
-    // shape safety
     p.transactions = Array.isArray(p.transactions)?p.transactions:[];
     if(!p.categories || typeof p.categories!=='object'){
       p.categories = { Income:[], Expense:[] };
     }
-    // if categories missing, seed from transactions
     ['Income','Expense'].forEach(t=>{
       if(!Array.isArray(p.categories[t])) p.categories[t]=[];
     });
-    if (p.categories.Income.length===0 || p.categories.Expense.length===0){
-      const fromTx = { Income:new Set(), Expense:new Set() };
-      (p.transactions||[]).forEach(tx=>{ if(fromTx[tx.type]) fromTx[tx.type].add(tx.category||''); });
-      if (p.categories.Income.length===0) p.categories.Income = Array.from(fromTx.Income).filter(Boolean);
-      if (p.categories.Expense.length===0) p.categories.Expense = Array.from(fromTx.Expense).filter(Boolean);
-    }
     return {...base,...p};
   }catch{
     return {
@@ -56,12 +46,16 @@ function load(){
 }
 function save(){ localStorage.setItem(STORAGE_KEY,JSON.stringify(state)); }
 
-/* ---------- Current form type = active tab ---------- */
+/* ---------- Current tab/type & form visibility ---------- */
 let currentTab = 'overview';
 function currentFormType(){
   return currentTab==='income' ? 'Income'
        : currentTab==='expenses' ? 'Expense'
        : 'Expense';
+}
+function updateFormVisibility(){
+  const show = currentTab==='income' || currentTab==='expenses';
+  $('#formCard').style.display = show ? '' : 'none';
 }
 
 /* ---------- Month picker & today ---------- */
@@ -78,7 +72,7 @@ $('#btnToday')?.addEventListener('click',()=>{
 });
 
 /* ---------- Category Chips ---------- */
-let selectedCategory = ''; // the chip the user clicked
+let selectedCategory = '';
 
 function renderCategoryChips(){
   const wrap = $('#catChips'); if(!wrap) return;
@@ -98,6 +92,7 @@ function renderCategoryChips(){
 }
 
 $('#addCatBtn')?.addEventListener('click', ()=>{
+  if (currentTab==='overview') return; // form hidden here anyway
   const type = currentFormType();
   const name = prompt(`New ${type} category name:`);
   if (!name) return;
@@ -113,7 +108,7 @@ $('#addCatBtn')?.addEventListener('click', ()=>{
   renderCategoryChips();
 });
 
-/* ---------- Expose tab-change hook from HTML ---------- */
+/* ---------- Tab activation hook from HTML ---------- */
 function setFormTypeBadge(){
   const b = $('#formTypeBadge'); if(!b) return;
   const t = currentFormType();
@@ -123,13 +118,9 @@ function setFormTypeBadge(){
 }
 window.onTabActivated = function(name){
   currentTab = name;
+  updateFormVisibility();
   setFormTypeBadge();
-  if (currentTab==='overview') {
-    // keep form usable but default to Expense
-    selectedCategory = '';
-  } else {
-    selectedCategory = '';
-  }
+  selectedCategory = '';
   renderCategoryChips();
 };
 
@@ -138,9 +129,8 @@ let editId = null;
 
 function enterEditMode(tx){
   editId = tx.id;
-  $('#txDate').value = tx.date || isoDate();
-  // ensure category exists in current type set, switch to that tab
   window.onTabActivated?.(tx.type==='Income' ? 'income' : 'expenses');
+  $('#txDate').value = tx.date || isoDate();
   if (!state.categories[tx.type]) state.categories[tx.type]=[];
   if (!state.categories[tx.type].includes(tx.category)) {
     state.categories[tx.type].push(tx.category);
@@ -165,6 +155,8 @@ function exitEditMode(){
 const form = $('#txForm');
 form?.addEventListener('submit',(e)=>{
   e.preventDefault();
+  if (currentTab==='overview') return;
+
   const type = currentFormType();
 
   if (!selectedCategory) {
@@ -190,7 +182,6 @@ form?.addEventListener('submit',(e)=>{
   }else{
     state.transactions.push({id:uid(),...tx});
   }
-  // persist category if it is new
   if (!state.categories[type]) state.categories[type]=[];
   if (!state.categories[type].includes(selectedCategory)) {
     state.categories[type].push(selectedCategory);
@@ -244,7 +235,7 @@ function drawChart(){
         {label:'Expenses',data:exp,backgroundColor:'rgba(176,0,32,.45)',yAxisID:'y'},
         {label:'Running Balance',data:run,type:'line',borderColor:'#2563eb',fill:false,yAxisID:'y1'}
       ]},
-      options:{responsive:true,scales:{
+      options:{responsive:true,interaction:{mode:'index',intersect:false},scales:{
         y:{beginAtZero:true,title:{display:true,text:'€ per day'}},
         y1:{position:'right',beginAtZero:true,grid:{drawOnChartArea:false},title:{display:true,text:'€ balance'}}
       }}
@@ -298,6 +289,7 @@ function renderExpenseTable(){
 
 /* ---------- Render all ---------- */
 function renderAll(){
+  updateFormVisibility();
   setFormTypeBadge();
   renderCategoryChips();
   renderSummary();
