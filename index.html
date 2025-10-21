@@ -5,229 +5,200 @@
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Family Budget</title>
 
+  <!-- Stylesheet (keep / replace your own if you like) -->
   <link rel="stylesheet" href="styles.css"/>
 
   <!-- Chart.js for Overview graph -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <style>
-    /* Safety/utility styles (your styles.css still applies) */
-    :root {
-      --border:#e5e7eb;
-      --muted:#6b7280;
-      --green:#0a7f2e;
-      --red:#b00020;
-      --primary:#2563eb;
-    }
-    body { margin:0; font-family:-apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif; }
-    header { position:sticky; top:0; background:#fff; z-index:10; border-bottom:1px solid var(--border); }
-    .topline { display:flex; gap:12px; align-items:center; justify-content:space-between; padding:10px 16px; flex-wrap:wrap; }
-    .monthbar { display:flex; gap:8px; align-items:center; }
-    .monthbar label { color:var(--muted); }
-    input[type="month"] { padding:6px 8px; border:1px solid var(--border); border-radius:8px; }
-    button.ghost { padding:6px 10px; border:1px solid var(--border); background:#fff; border-radius:8px; cursor:pointer; }
-    nav.tabs { display:flex; gap:8px; padding:0 16px 8px; border-bottom:1px solid var(--border); }
-    nav.tabs button { padding:8px 12px; border:1px solid var(--border); background:#f8fafc; border-radius:8px 8px 0 0; cursor:pointer; }
-    nav.tabs button.active { background:#fff; border-bottom-color:#fff; font-weight:600; }
-    main { padding:16px; }
-    section.tabpanel { display:none; }
-    section.tabpanel.active { display:block; }
-
-    .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:4px 0 14px; }
-    .stat { border:1px solid var(--border); border-radius:10px; padding:10px; }
-    .stat .label { color:var(--muted); font-size:12px; }
-    .stat .value { font-weight:700; font-size:18px; }
-    .green { color:var(--green); } .red { color:var(--red); }
-
-    .catbar { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 12px; }
-    .catbar button { padding:6px 10px; border:1px solid var(--border); background:#fff; border-radius:16px; cursor:pointer; }
-    .catbar button.active { border-color:var(--primary); color:#fff; background:var(--primary); }
-
-    .card { border:1px solid var(--border); border-radius:10px; padding:12px; margin-top:16px; }
-    .row { display:grid; grid-template-columns:120px 1fr; gap:10px; align-items:center; margin:8px 0; }
-    input, select { padding:8px; border:1px solid var(--border); border-radius:8px; }
-    .btnrow { display:flex; gap:10px; }
-    button.primary { background:var(--primary); color:#fff; border:1px solid var(--primary); padding:8px 12px; border-radius:8px; cursor:pointer; }
-    table { width:100%; border-collapse:collapse; }
-    th, td { border-bottom:1px solid var(--border); padding:8px; text-align:left; }
-    th.right, td.right { text-align:right; }
-    td.nowrap { white-space:nowrap; }
-    .actions button { margin-right:6px; }
+    /* Minimal layout to guarantee working UI even without styles.css */
+    :root{--b:#e5e7eb;--bg:#f8fafc;--txt:#111827;--mut:#6b7280;--green:#0a7f2e;--red:#b00020;--blue:#2563eb}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:-apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:var(--txt)}
+    header{position:sticky;top:0;background:#fff;z-index:10;border-bottom:1px solid var(--b)}
+    .top{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:12px 16px}
+    .monthbar{display:flex;gap:8px;align-items:center}
+    .monthbar label{color:var(--mut);font-size:12px}
+    nav.tabs{display:flex;gap:8px;padding:0 16px 10px;border-bottom:1px solid var(--b)}
+    nav.tabs button{padding:8px 12px;border:1px solid var(--b);background:var(--bg);border-radius:8px 8px 0 0;cursor:pointer}
+    nav.tabs button.active{background:#fff;border-bottom-color:#fff;font-weight:600}
+    main{padding:16px}
+    section.tabpanel{display:none}
+    section.tabpanel.active{display:block}
+    .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:6px 0 16px}
+    .stat{border:1px solid var(--b);border-radius:10px;padding:12px}
+    .stat .label{color:var(--mut);font-size:12px}
+    .stat .value{font-weight:700;font-size:18px}
+    .green{color:var(--green)} .red{color:var(--red)}
+    .cards{display:flex;gap:12px}
+    .row{display:grid;grid-template-columns:120px 1fr;gap:10px;align-items:center;margin:8px 0}
+    input,select,button{font-size:1rem;padding:8px;border:1px solid var(--b);border-radius:8px}
+    button.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
+    button.ghost{background:#fff}
+    table{width:100%;border-collapse:collapse;margin-top:12px}
+    th,td{border-bottom:1px solid var(--b);padding:8px;text-align:left}
+    th.right,td.right{text-align:right}
+    .chipbar{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+    .chip{padding:6px 10px;border:1px solid var(--b);border-radius:999px;background:#fff;cursor:pointer}
+    .chip.active{background:#eef4ff;border-color:#c7d7ff;color:#103f91}
   </style>
 </head>
 <body>
 
-<header>
-  <div class="topline">
-    <h1 style="margin:0;">Family Budget</h1>
-    <div class="monthbar">
-      <label for="monthPicker">Month</label>
-      <input type="month" id="monthPicker"/>
-      <button id="btnToday" class="ghost">Today</button>
-    </div>
-  </div>
-
-  <nav class="tabs">
-    <button class="tab active" data-tab="overview">Overview</button>
-    <button class="tab" data-tab="income">Income</button>
-    <button class="tab" data-tab="expenses">Expenses</button>
-  </nav>
-</header>
-
-<main>
-  <!-- ============== OVERVIEW ============== -->
-  <section id="tab-overview" class="tabpanel active">
-    <div class="stats">
-      <div class="stat">
-        <div class="label">Income</div>
-        <div id="sumIncome" class="value green">€ 0,00</div>
-      </div>
-      <div class="stat">
-        <div class="label">Expenses</div>
-        <div id="sumExpense" class="value red">€ 0,00</div>
-      </div>
-      <div class="stat">
-        <div class="label">Balance</div>
-        <div id="sumBalance" class="value">€ 0,00</div>
+  <header>
+    <div class="top">
+      <h1 style="margin:0;">Family Budget</h1>
+      <div class="monthbar">
+        <label for="monthPicker">Month</label>
+        <input type="month" id="monthPicker"/>
+        <button id="btnToday" class="ghost" title="Set month to current">Today</button>
       </div>
     </div>
+    <nav class="tabs">
+      <button class="tab active" data-tab="overview">Overview</button>
+      <button class="tab" data-tab="income">Income</button>
+      <button class="tab" data-tab="expenses">Expenses</button>
+    </nav>
+  </header>
 
-    <h2 style="margin:12px 0 8px;">Monthly Graph</h2>
-    <canvas id="monthChart" height="160"></canvas>
-    <!-- No form/table on Overview -->
-  </section>
+  <main>
+    <!-- ================= OVERVIEW ================= -->
+    <section id="tab-overview" class="tabpanel active">
+      <div class="stats">
+        <div class="stat"><div class="label">Income</div><div id="sumIncome" class="value green">€ 0,00</div></div>
+        <div class="stat"><div class="label">Expenses</div><div id="sumExpense" class="value red">€ 0,00</div></div>
+        <div class="stat"><div class="label">Balance</div><div id="sumBalance" class="value">€ 0,00</div></div>
+      </div>
 
-  <!-- ============== INCOME ============== -->
-  <section id="tab-income" class="tabpanel">
-    <h2 style="margin:0 0 6px;">Income</h2>
-
-    <!-- category buttons -->
-    <div class="catbar" id="incomeCatBar"></div>
-
-    <!-- add/edit form -->
-    <section class="card">
-      <h3 style="margin:0 0 8px;">Add / Edit Income</h3>
-      <form id="incomeForm" autocomplete="off">
-        <input type="hidden" id="incomeEditingId" value="">
-        <div class="row">
-          <label>Category</label>
-          <div id="incomeSelectedCat" style="font-weight:600;">—</div>
-        </div>
-        <div class="row">
-          <label for="incomeDate">Date</label>
-          <input type="date" id="incomeDate" required>
-        </div>
-        <div class="row">
-          <label for="incomeAmount">Amount</label>
-          <input type="text" id="incomeAmount" inputmode="decimal" placeholder="e.g. 1.234,56" required>
-        </div>
-        <div class="row">
-          <label for="incomeNote">Note</label>
-          <input type="text" id="incomeNote" placeholder="Optional">
-        </div>
-        <div class="btnrow">
-          <button class="primary" type="submit" id="incomeSubmit">Add</button>
-          <button class="ghost" type="button" id="incomeClear">Clear</button>
-        </div>
-      </form>
+      <h2 style="margin:12px 0 8px;">Monthly Graph</h2>
+      <canvas id="monthChart" height="160"></canvas>
     </section>
 
-    <table class="list" style="margin-top:16px;">
-      <thead>
-      <tr>
-        <th style="width:120px;">Date</th>
-        <th>Category</th>
-        <th class="right" style="width:140px;">Amount</th>
-        <th>Note</th>
-        <th style="width:130px;">Actions</th>
-      </tr>
-      </thead>
-      <tbody id="incomeTbody"></tbody>
-      <tfoot>
-      <tr>
-        <td colspan="2" class="right"><strong>Total</strong></td>
-        <td class="right"><strong id="incomeTotal"></strong></td>
-        <td colspan="2"></td>
-      </tr>
-      </tfoot>
-    </table>
-  </section>
+    <!-- ================= INCOME ================= -->
+    <section id="tab-income" class="tabpanel">
+      <h2 style="margin:0 0 8px;">Income</h2>
+      <div class="chipbar" id="incomeChipbar"></div>
 
-  <!-- ============== EXPENSES ============== -->
-  <section id="tab-expenses" class="tabpanel">
-    <h2 style="margin:0 0 6px;">Expenses</h2>
+      <section class="card">
+        <h3 style="margin:0 0 8px;">Add / Edit Income</h3>
+        <form id="incomeForm" autocomplete="off">
+          <div class="row">
+            <label>Category</label>
+            <div id="incomeSelectedCat">–</div>
+          </div>
+          <div class="row">
+            <label for="inDate">Date</label>
+            <input type="date" id="inDate" required/>
+          </div>
+          <div class="row">
+            <label for="inAmount">Amount</label>
+            <input type="text" id="inAmount" inputmode="decimal" placeholder="e.g. 1.234,56" required/>
+          </div>
+          <div class="row">
+            <label for="inNote">Note</label>
+            <input type="text" id="inNote" placeholder="Optional"/>
+          </div>
+          <div class="row" style="grid-template-columns:1fr 1fr">
+            <button class="primary" type="submit">Add</button>
+            <button class="ghost" type="button" id="inClear">Clear</button>
+          </div>
+        </form>
+      </section>
 
-    <!-- category buttons -->
-    <div class="catbar" id="expenseCatBar"></div>
-
-    <!-- add/edit form -->
-    <section class="card">
-      <h3 style="margin:0 0 8px;">Add / Edit Expense</h3>
-      <form id="expenseForm" autocomplete="off">
-        <input type="hidden" id="expenseEditingId" value="">
-        <div class="row">
-          <label>Category</label>
-          <div id="expenseSelectedCat" style="font-weight:600;">—</div>
-        </div>
-        <div class="row">
-          <label for="expenseDate">Date</label>
-          <input type="date" id="expenseDate" required>
-        </div>
-        <div class="row">
-          <label for="expenseAmount">Amount</label>
-          <input type="text" id="expenseAmount" inputmode="decimal" placeholder="e.g. 12,34" required>
-        </div>
-        <div class="row">
-          <label for="expenseNote">Note</label>
-          <input type="text" id="expenseNote" placeholder="Optional">
-        </div>
-        <div class="btnrow">
-          <button class="primary" type="submit" id="expenseSubmit">Add</button>
-          <button class="ghost" type="button" id="expenseClear">Clear</button>
-        </div>
-      </form>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:120px;">Date</th>
+            <th>Category</th>
+            <th class="right" style="width:140px;">Amount</th>
+            <th>Note</th>
+            <th style="width:130px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="incomeTbody"></tbody>
+        <tfoot>
+          <tr>
+            <td colspan="2" class="right"><strong>Total</strong></td>
+            <td class="right"><strong id="incomeTotal">€ 0,00</strong></td>
+            <td colspan="2"></td>
+          </tr>
+        </tfoot>
+      </table>
     </section>
 
-    <table class="list" style="margin-top:16px;">
-      <thead>
-      <tr>
-        <th style="width:120px;">Date</th>
-        <th>Category</</th>
-        <th class="right" style="width:140px;">Amount</th>
-        <th>Note</th>
-        <th style="width:130px;">Actions</th>
-      </tr>
-      </thead>
-      <tbody id="expenseTbody"></tbody>
-      <tfoot>
-      <tr>
-        <td colspan="2" class="right"><strong>Total</strong></td>
-        <td class="right"><strong id="expenseTotal"></strong></td>
-        <td colspan="2"></td>
-      </tr>
-      </tfoot>
-    </table>
-  </section>
-</main>
+    <!-- ================= EXPENSES ================= -->
+    <section id="tab-expenses" class="tabpanel">
+      <h2 style="margin:0 0 8px;">Expenses</h2>
+      <div class="chipbar" id="expenseChipbar"></div>
 
-<!-- Tabs wiring (very small) -->
-<script>
-  (function(){
-    const tabs = Array.from(document.querySelectorAll('nav.tabs .tab'));
-    const panels = {
-      overview: document.getElementById('tab-overview'),
-      income:   document.getElementById('tab-income'),
-      expenses: document.getElementById('tab-expenses')
-    };
-    function activate(name){
-      tabs.forEach(t=>t.classList.toggle('active', t.dataset.tab===name));
-      Object.entries(panels).forEach(([k,el])=>el.classList.toggle('active', k===name));
-    }
-    tabs.forEach(btn=>btn.addEventListener('click', ()=>activate(btn.dataset.tab)));
-    window.__activateTab = activate; // used by app.js on certain actions
-  })();
-</script>
+      <section class="card">
+        <h3 style="margin:0 0 8px;">Add / Edit Expense</h3>
+        <form id="expenseForm" autocomplete="off">
+          <div class="row">
+            <label>Category</label>
+            <div id="expenseSelectedCat">–</div>
+          </div>
+          <div class="row">
+            <label for="exDate">Date</label>
+            <input type="date" id="exDate" required/>
+          </div>
+          <div class="row">
+            <label for="exAmount">Amount</label>
+            <input type="text" id="exAmount" inputmode="decimal" placeholder="e.g. 12,34" required/>
+          </div>
+          <div class="row">
+            <label for="exNote">Note</label>
+            <input type="text" id="exNote" placeholder="Optional"/>
+          </div>
+          <div class="row" style="grid-template-columns:1fr 1fr">
+            <button class="primary" type="submit">Add</button>
+            <button class="ghost" type="button" id="exClear">Clear</button>
+          </div>
+        </form>
+      </section>
 
-<script src="app.js"></script>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:120px;">Date</th>
+            <th>Category</th>
+            <th class="right" style="width:140px;">Amount</th>
+            <th>Note</th>
+            <th style="width:130px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="expenseTbody"></tbody>
+        <tfoot>
+          <tr>
+            <td colspan="2" class="right"><strong>Total</strong></td>
+            <td class="right"><strong id="expenseTotal">€ 0,00</strong></td>
+            <td colspan="2"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </section>
+  </main>
+
+  <!-- Tabs & month wiring -->
+  <script>
+    (function(){
+      const tabs = [...document.querySelectorAll('nav.tabs .tab')];
+      const panels = {
+        overview: document.getElementById('tab-overview'),
+        income:   document.getElementById('tab-income'),
+        expenses: document.getElementById('tab-expenses')
+      };
+      function activate(name){
+        tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+        Object.entries(panels).forEach(([k,el]) => el.classList.toggle('active', k === name));
+      }
+      tabs.forEach(btn => btn.addEventListener('click', () => activate(btn.dataset.tab)));
+      // expose for app.js (when clicking Edit row)
+      window.switchTo = activate;
+    })();
+  </script>
+
+  <script src="app.js"></script>
 </body>
 </html>
