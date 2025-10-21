@@ -1,10 +1,9 @@
 /* ==========================================================
-   Family Budget – app.js (Overview = KPIs + Graph; Lists on tabs)
-   - State in LocalStorage
-   - Month selection + Today button
-   - Add / Edit / Delete transactions
-   - Renders two tables: #incomeTbody and #expenseTbody
-   - Safe if elements are missing
+   Family Budget – app.js
+   Overview = KPIs + Graph only
+   Income/Expenses tabs each have their own table
+   Add / Edit / Delete transactions
+   LocalStorage; Month picker; Today button
    ========================================================== */
 
 /* ------------------ Utilities ------------------ */
@@ -36,11 +35,7 @@ const STORAGE_KEY = 'family-budget/v1';
 
 const defaultState = {
   selectedMonth: isoDate().slice(0, 7),       // YYYY-MM
-  categories: {
-    Income:  ['Salary', 'Bonus'],
-    Expense: ['Groceries', 'Restaurants', 'Transport']
-  },
-  transactions: []                            // { id, type, date, category, amount, note }
+  transactions: []                            // { id, type: 'Income'|'Expense', date:'YYYY-MM-DD', category, amount, note }
 };
 
 let state = loadFromStorage();
@@ -53,7 +48,6 @@ function loadFromStorage() {
     return {
       ...defaultState,
       ...parsed,
-      categories: { ...defaultState.categories, ...(parsed.categories || {}) },
       transactions: Array.isArray(parsed.transactions) ? parsed.transactions : []
     };
   } catch {
@@ -62,17 +56,12 @@ function loadFromStorage() {
 }
 
 function saveToStorage() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch (e) {
-    console.error('Storage error', e);
-  }
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+  catch (e) { console.error('Storage error', e); }
 }
 
-/* ------------------ Selected Month ------------------ */
-const monthPicker =
-  $('#monthPicker') || $('#month') || document.querySelector('input[type="month"]');
-
+/* ------------------ Month picker & Today button ------------------ */
+const monthPicker = $('#monthPicker') || document.querySelector('input[type="month"]');
 if (monthPicker) {
   monthPicker.value = state.selectedMonth;
   monthPicker.addEventListener('change', () => {
@@ -82,66 +71,65 @@ if (monthPicker) {
   });
 }
 
-/* ------------------ Today Button (optional) ------------------ */
-const btnToday = $('#btnToday') || $('#todayBtn') || $('#resetMonthBtn');
+const btnToday = $('#btnToday');
 if (btnToday) {
-  const dateInput = $('#txDate') || $('#date') || $('#dtDate');
   btnToday.addEventListener('click', () => {
+    const dateInput = $('#txDate');
     if (dateInput) dateInput.value = isoDate(new Date());
   });
 }
 
-/* ------------------ Edit / Delete handling ------------------ */
+/* ------------------ Add / Edit / Delete ------------------ */
 let editId = null; // null -> add mode
 
 function enterEditMode(tx) {
   editId = tx.id;
   const f = {
-    type:      $('#txType')      || $('#type'),
-    date:      $('#txDate')      || $('#date'),
-    category:  $('#txCategory')  || $('#category'),
-    amount:    $('#txAmount')    || $('#amount'),
-    note:      $('#txNote')      || $('#note')
+    type:      $('#txType'),
+    date:      $('#txDate'),
+    category:  $('#txCategory'),
+    amount:    $('#txAmount'),
+    note:      $('#txNote')
   };
   if (f.type)     f.type.value = tx.type;
   if (f.date)     f.date.value = tx.date;
   if (f.category) f.category.value = tx.category;
-  if (f.amount)   f.amount.value = String(tx.amount).replace('.', ',');
+  if (f.amount)   f.amount.value = String(tx.amount).replace('.', ','); // allow comma style
   if (f.note)     f.note.value = tx.note || '';
 
-  const submit = $('#txSubmit') || $('#addBtn') || $('#submitBtn');
-  if (submit) submit.textContent = 'Save';
-  const clear  = $('#clearForm') || $('#btnClear');
-  if (clear) clear.textContent = 'Cancel';
+  const submit = $('#txSubmit'); if (submit) submit.textContent = 'Save';
+  const clear  = $('#clearForm'); if (clear) clear.textContent = 'Cancel';
+
+  // Optional: switch tab to the right form context
+  if (typeof window.showFormTabForType === 'function') {
+    window.showFormTabForType(tx.type);
+  }
 }
 
 function exitEditMode() {
   editId = null;
-  const submit = $('#txSubmit') || $('#addBtn') || $('#submitBtn');
-  if (submit) submit.textContent = 'Add';
-  const clear  = $('#clearForm') || $('#btnClear');
-  if (clear) clear.textContent = 'Clear';
+  const submit = $('#txSubmit'); if (submit) submit.textContent = 'Add';
+  const clear  = $('#clearForm'); if (clear) clear.textContent = 'Clear';
 }
 
-/* ------------------ Add / Save form ------------------ */
-const form = $('#txForm') || $('#formTx') || $('#tx-form');
+const form = $('#txForm');
 if (form) {
   form.addEventListener('submit', (e) => {
     e.preventDefault();
 
     const f = {
-      type:      $('#txType')      || $('#type'),
-      date:      $('#txDate')      || $('#date'),
-      category:  $('#txCategory')  || $('#category'),
-      amount:    $('#txAmount')    || $('#amount'),
-      note:      $('#txNote')      || $('#note')
+      type:      $('#txType'),
+      date:      $('#txDate'),
+      category:  $('#txCategory'),
+      amount:    $('#txAmount'),
+      note:      $('#txNote')
     };
 
     const tx = {
       type: (f.type?.value || 'Expense'),
       date: (f.date?.value || isoDate()),
       category: (f.category?.value || ''),
-      // support BE entry (1.234,56) -> 1234.56
+      // support BE entry like 1.234,56 -> 1234.56
       amount: Number(String(f.amount?.value || '0').replace(/\./g, '').replace(',', '.')),
       note: (f.note?.value || '')
     };
@@ -161,16 +149,16 @@ if (form) {
     renderAll();
 
     form.reset?.();
-    const dateEl = $('#txDate') || $('#date');
+    const dateEl = $('#txDate');
     if (dateEl) dateEl.value = isoDate(new Date());
   });
 
-  const clearBtn = $('#clearForm') || $('#btnClear');
+  const clearBtn = $('#clearForm');
   if (clearBtn) clearBtn.addEventListener('click', (e) => {
     e.preventDefault();
     if (editId) exitEditMode();
     form.reset?.();
-    const dateEl = $('#txDate') || $('#date');
+    const dateEl = $('#txDate');
     if (dateEl) dateEl.value = isoDate(new Date());
   });
 }
@@ -199,14 +187,67 @@ function renderSummary() {
   if (elBalance) elBalance.textContent = formatMoney(balance);
 }
 
-function renderGraph() {
-  // If you already have a chart function defined elsewhere, we call it.
-  if (typeof window.drawMonthlyGraph === 'function') {
-    window.drawMonthlyGraph(state);
+// Chart.js graph in Overview
+function drawMonthlyGraph() {
+  const canvas = $('#monthChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  const ym = state.selectedMonth;
+  const [y, m] = ym.split('-').map(Number);
+  const daysInMonth = new Date(y, m, 0).getDate();
+
+  const incomePerDay  = Array(daysInMonth).fill(0);
+  const expensePerDay = Array(daysInMonth).fill(0);
+
+  state.transactions.forEach(t => {
+    if (!t.date || t.date.slice(0,7) !== ym) return;
+    const d = new Date(t.date).getDate() - 1;
+    if (t.type === 'Income') incomePerDay[d]  += Number(t.amount) || 0;
+    else                     expensePerDay[d] += Number(t.amount) || 0;
+  });
+
+  // running balance
+  const balance = [];
+  let run = 0;
+  for (let i=0;i<daysInMonth;i++){
+    run += incomePerDay[i] - expensePerDay[i];
+    balance.push(run);
+  }
+
+  const labels = Array.from({length:daysInMonth}, (_,i)=> String(i+1));
+  const ctx = canvas.getContext('2d');
+
+  if (!window.__budgetChart) {
+    window.__budgetChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          { label:'Income',  data: incomePerDay,  backgroundColor:'rgba(16,152,69,0.45)', yAxisID:'y' },
+          { label:'Expenses',data: expensePerDay, backgroundColor:'rgba(176,0,32,0.45)', yAxisID:'y' },
+          { label:'Running Balance', data: balance, type:'line', borderColor:'#2563eb', fill:false, yAxisID:'y1' }
+        ]
+      },
+      options: {
+        responsive:true,
+        scales: {
+          y:  { beginAtZero:true, title:{display:true,text:'€ per day'} },
+          y1: { position:'right', beginAtZero:true, grid:{drawOnChartArea:false}, title:{display:true,text:'€ balance'} }
+        },
+        plugins: { legend: { position:'top' } }
+      }
+    });
+  } else {
+    const c = window.__budgetChart;
+    c.data.labels = labels;
+    c.data.datasets[0].data = incomePerDay;
+    c.data.datasets[1].data = expensePerDay;
+    c.data.datasets[2].data = balance;
+    c.update();
   }
 }
 
-/* ------------------ Tables per tab ------------------ */
+/* ------------------ Tables per-tab ------------------ */
 function rowHtml(tx) {
   return `
     <tr data-id="${tx.id}">
@@ -230,9 +271,6 @@ function wireRowButtons(tbody) {
       const id = e.target.closest('tr')?.dataset.id;
       const tx = state.transactions.find(t => t.id === id);
       if (tx) enterEditMode(tx);
-      if (typeof window.showFormTabForType === 'function') {
-        window.showFormTabForType(tx?.type || 'Expense');
-      }
     });
   });
 
@@ -262,7 +300,6 @@ function renderIncomeTable() {
   tbody.innerHTML = list.map(rowHtml).join('');
   wireRowButtons(tbody);
 
-  // Optional footer total
   const foot = $('#incomeTotal');
   if (foot) {
     const total = list.reduce((s, t) => s + (Number(t.amount) || 0), 0);
@@ -291,18 +328,19 @@ function renderExpenseTable() {
 
 /* ------------------ Global render ------------------ */
 function renderAll() {
-  renderSummary();    // Overview KPIs
-  renderGraph();      // Overview graph (if you have it)
-  renderIncomeTable();
-  renderExpenseTable();
+  renderSummary();      // Overview KPIs
+  drawMonthlyGraph();   // Overview graph
+  renderIncomeTable();  // Income tab list
+  renderExpenseTable(); // Expenses tab list
 }
 
+// expose for debugging if needed
+window.state = state;
 window.renderAll = renderAll;
-window.state = state; // dev convenience
 
 /* ------------------ Boot ------------------ */
 document.addEventListener('DOMContentLoaded', () => {
-  const dateEl = $('#txDate') || $('#date');
+  const dateEl = $('#txDate');
   if (dateEl && !dateEl.value) dateEl.value = isoDate();
   renderAll();
 });
