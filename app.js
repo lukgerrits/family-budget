@@ -1,339 +1,501 @@
 /* =========================================================
-   Family Budget – app.js
-   - Month in header is always usable
-   - Overview has stats + graph (no form, no table)
-   - Income / Expenses: category chips + +New, form, table, edit/delete
-   - Data in localStorage
+   Family Budget — app.js (clean full version)
+   - Overview: stats + Chart.js graph
+   - Income/Expenses: category chips + +New, form, table (edit/delete)
+   - Month filter via #monthPicker if present (else current month)
+   - Data persisted in localStorage
    ========================================================= */
-const $ = (s) => document.querySelector(s);
 
-const STORAGE_KEY = 'family-budget/v3';
+/////////////////////////////
+// Utilities & formatting  //
+/////////////////////////////
+const $      = (s) => document.querySelector(s);
+const $$     = (s) => Array.from(document.querySelectorAll(s));
+const NOW    = new Date();
+const EUR    = new Intl.NumberFormat('nl-BE', { style: 'currency', currency: 'EUR' });
 
-function euro(n) {
-  // cents -> € string with Belgian formatting
-  const v = (n || 0) / 100;
-  return v.toLocaleString('nl-BE', { style: 'currency', currency: 'EUR' });
+function fmtMoney(n) {
+  const num = Number(n) || 0;
+  return EUR.format(num);
 }
-function parseAmountToCents(str) {
+function parseMoneyInput(str) {
+  // Accepts both "1.234,56" and "1234.56" and "1234"
   if (!str) return 0;
   let s = String(str).trim();
-  // normalize: keep digits, commas, dots; replace comma with dot for decimal
-  s = s.replace(/[^\d,.\-]/g, '').replace(',', '.');
-  const f = parseFloat(s);
-  if (isNaN(f)) return 0;
-  return Math.round(f * 100);
+  // Remove spaces
+  s = s.replace(/\s+/g, '');
+  // If comma is decimal separator, convert
+  const hasComma = s.includes(',');
+  const hasDot   = s.includes('.');
+  if (hasComma && hasDot) {
+    // "1.234,56" -> remove thousands dot, replace comma with dot
+    s = s.replace(/\./g, '').replace(',', '.');
+  } else if (hasComma) {
+    // "1234,56" -> replace comma with dot
+    s = s.replace(',', '.');
+  }
+  const val = parseFloat(s);
+  return isNaN(val) ? 0 : val;
 }
-function yyyymm(date) {
-  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
+function isoMonth(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
 }
-function todayISO() {
-  const d = new Date();
-  return d.toISOString().slice(0,10);
+function daysInMonth(y, m /*0..11*/) {
+  return new Date(y, m+1, 0).getDate();
+}
+function toISODateString(d) {
+  if (typeof d === 'string') return d;
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function sameMonth(isoDate, isoMonthStr) {
+  // isoDate: YYYY-MM-DD ; isoMonthStr: YYYY-MM
+  return isoDate.slice(0,7) === isoMonthStr;
 }
 
-let state = load();
-let chart; // Chart.js instance
+/////////////////////////////////////
+// State (localStorage) management //
+/////////////////////////////////////
+const STORAGE_KEY = 'family-budget/v2';
 
-function load() {
+const defaultState = () => ({
+  selectedMonth: isoMonth(NOW),
+  categories: {
+    Income:  ['Salary'],
+    Expense: ['Groceries', 'Rent', 'Utilities']
+  },
+  transactions: [] // {id, type, date:'YYYY-MM-DD', category, amount:Number, note}
+});
+
+function loadState() {
+  const raw  = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return defaultState();
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return {
-        selectedMonth: yyyymm(new Date()),
-        categories: {
-          Income: ['Salary'],
-          Expense: ['Rent', 'Groceries', 'Utilities']
-        },
-        selectedCat: { Income: null, Expense: null },
-        transactions: [] // {id, type:'Income'|'Expense', date:'YYYY-MM-DD', amountCents, category, note}
-      };
-    }
     const s = JSON.parse(raw);
-    // defaults for new keys
-    s.categories ??= { Income: ['Salary'], Expense: ['Rent','Groceries','Utilities'] };
-    s.selectedCat ??= { Income:null, Expense:null };
+    // Light validation
+    s.selectedMonth ??= isoMonth(NOW);
+    s.categories ??= { Income:[], Expense:[] };
+    s.categories.Income  ??= [];
+    s.categories.Expense ??= [];
     s.transactions ??= [];
-    s.selectedMonth ??= yyyymm(new Date());
     return s;
-  } catch(e) {
-    console.warn('Load error', e);
-    return {
-      selectedMonth: yyyymm(new Date()),
-      categories: { Income:['Salary'], Expense:['Rent','Groceries','Utilities'] },
-      selectedCat: { Income:null, Expense:null },
-      transactions: []
-    };
+  } catch {
+    return defaultState();
   }
 }
-function save() {
+function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
-/* ---------------- Header / Month ---------------- */
-const monthPicker = $('#monthPicker');
-const btnToday = $('#btnToday');
-monthPicker.value = state.selectedMonth;
-btnToday.addEventListener('click', () => {
-  state.selectedMonth = yyyymm(new Date());
-  monthPicker.value = state.selectedMonth;
-  save();
-  renderAll();
-});
-monthPicker.addEventListener('change', (e) => {
-  state.selectedMonth = e.target.value || state.selectedMonth;
-  save();
-  renderAll();
-});
+let state = loadState();
+let editingId = null;          // transaction id being edited
+let activeTab = 'overview';    // overview | income | expenses
+let selectedCategory = null;   // controlled by chips
+let monthInputEl = null;       // optional #monthPicker
 
-/* ---------------- Helpers for filtering ---------------- */
-function inSelectedMonth(tx) {
-  return (tx.date || '').slice(0,7) === state.selectedMonth;
+/////////////////////////////
+// DOM element references  //
+/////////////////////////////
+const el = {
+  // overview
+  sumIncome:   $('#sumIncome'),
+  sumExpense:  $('#sumExpense'),
+  sumBalance:  $('#sumBalance'),
+  chartCanvas: $('#monthChart'),
+
+  // income tab
+  incomeTbody:  $('#incomeTbody'),
+  incomeTotal:  $('#incomeTotal'),
+  incomeCatBar: $('#incomeCatBar'),
+
+  // expenses tab
+  expenseTbody:  $('#expenseTbody'),
+  expenseTotal:  $('#expenseTotal'),
+  expenseCatBar: $('#expenseCatBar'),
+
+  // form (shared)
+  form:      $('#txForm'),
+  date:      $('#txDate'),
+  amount:    $('#txAmount'),
+  note:      $('#txNote'),
+  submitBtn: $('#txSubmit'),
+  clearBtn:  $('#clearForm'),
+
+  // category display (the small label under "Category")
+  // In your HTML this is the element right after "Category" label (a dash initially)
+  categoryDisplay: null
+};
+
+function bindCategoryDisplay() {
+  // Try to find the <label for="txCategory">... then next sibling element
+  // or fallback to the element that shows the chosen category (a <div> or <span> with a dash initially).
+  // In your markup you had a dash "—". We’ll just pick the first element after the "Category" label row.
+  // Safer approach: add an id="txCategoryDisplay" to the HTML and query it here.
+  const maybe = document.getElementById('txCategoryDisplay');
+  if (maybe) {
+    el.categoryDisplay = maybe;
+    return;
+  }
+  // fallback: find row that contains label "Category"
+  const labels = $$('form#txForm label');
+  const catLabel = labels.find(l => /category/i.test(l.textContent));
+  if (catLabel) {
+    // Next sibling in the same row (grid)
+    const row = catLabel.closest('.row');
+    if (row) {
+      el.categoryDisplay = row.querySelector('div,span,p') || row.children[1];
+    }
+  }
 }
-function byType(type) {
-  return state.transactions.filter(t => t.type === type && inSelectedMonth(t));
+
+bindCategoryDisplay();
+
+/////////////////////////////
+// Tabs + month handling   //
+/////////////////////////////
+function setActiveTab(name) {
+  activeTab = name;
+  $$('.tabpanel').forEach(p => p.classList.remove('active'));
+  $(`section#tab-${name}`)?.classList.add('active');
+
+  $$('.tabs .tab').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+
+  // When switching tabs, reset edit mode, reset category highlight
+  editingId = null;
+  selectedCategory = null;
+  if (el.categoryDisplay) el.categoryDisplay.textContent = '—';
+  render();
 }
 
-/* ---------------- Category Bars ---------------- */
-function renderCategoryBar(type) {
-  const bar = type === 'Income' ? $('#incomeCatBar') : $('#expenseCatBar');
-  bar.innerHTML = '';
-  const list = state.categories[type] || [];
-  const selected = state.selectedCat[type];
-
-  list.forEach(cat => {
-    const b = document.createElement('button');
-    b.textContent = cat;
-    if (cat === selected) b.classList.add('active');
-    b.addEventListener('click', () => {
-      state.selectedCat[type] = cat;
-      save();
-      renderAll();
+function initMonthControl() {
+  monthInputEl = $('#monthPicker'); // may not exist (overview-only UIs)
+  if (monthInputEl) {
+    // ensure value is ISO month
+    monthInputEl.value = state.selectedMonth;
+    monthInputEl.addEventListener('change', () => {
+      state.selectedMonth = monthInputEl.value || isoMonth(NOW);
+      saveState();
+      render();
     });
-    bar.appendChild(b);
+  } else {
+    // no control -> keep state.selectedMonth as current month
+    state.selectedMonth ||= isoMonth(NOW);
+  }
+}
+
+/////////////////////////////
+// Category chips bar      //
+/////////////////////////////
+function renderCategoryBar(type /* 'Income' | 'Expense' */) {
+  const holder = type === 'Income' ? el.incomeCatBar : el.expenseCatBar;
+  if (!holder) return;
+
+  holder.innerHTML = '';
+  holder.classList.add('catbar');
+
+  const cats = state.categories[type];
+  cats.forEach(name => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'chip';
+    btn.textContent = name;
+    btn.addEventListener('click', () => {
+      selectedCategory = name;
+      if (el.categoryDisplay) el.categoryDisplay.textContent = name;
+      // focus date/amount for speed
+      if (el.date && !el.date.value) el.date.focus();
+      else el.amount?.focus();
+    });
+    holder.appendChild(btn);
   });
 
+  // + New button
   const addBtn = document.createElement('button');
+  addBtn.type = 'button';
+  addBtn.className = 'chip new';
   addBtn.textContent = '+ New';
   addBtn.addEventListener('click', () => {
-    const name = prompt(`New ${type} category name:`);
-    const clean = (name || '').trim();
+    const label = type === 'Income' ? 'income' : 'expense';
+    const name = prompt(`New ${label} category name:`);
+    if (!name) return;
+    const clean = name.trim();
     if (!clean) return;
-    if (!state.categories[type].includes(clean)) {
-      state.categories[type].push(clean);
-      state.selectedCat[type] = clean;
-      save();
-      renderAll();
-    } else {
-      state.selectedCat[type] = clean;
-      save();
-      renderAll();
+    if (state.categories[type].includes(clean)) {
+      alert('Category already exists.');
+      return;
     }
+    state.categories[type].push(clean);
+    saveState();
+    renderCategoryBar(type);
   });
-  bar.appendChild(addBtn);
-
-  const label = (type === 'Income') ? $('#incomeSelectedCat') : $('#expenseSelectedCat');
-  label.textContent = state.selectedCat[type] || '—';
+  holder.appendChild(addBtn);
 }
 
-/* ---------------- Forms ---------------- */
-function setupForm(type) {
-  const isInc = type === 'Income';
-  const form = isInc ? $('#incomeForm') : $('#expenseForm');
-  const idInput = isInc ? $('#incomeEditingId') : $('#expenseEditingId');
-  const dateInput = isInc ? $('#incomeDate') : $('#expenseDate');
-  const amtInput = isInc ? $('#incomeAmount') : $('#expenseAmount');
-  const noteInput = isInc ? $('#incomeNote') : $('#expenseNote');
-  const submitBtn = isInc ? $('#incomeSubmit') : $('#expenseSubmit');
-  const clearBtn = isInc ? $('#incomeClear') : $('#expenseClear');
-
-  // default date: today (or clamp into selected month)
-  if (!dateInput.value) dateInput.value = todayISO();
-
-  clearBtn.onclick = () => {
-    idInput.value = '';
-    amtInput.value = '';
-    noteInput.value = '';
-    dateInput.value = todayISO();
-  };
-
-  form.onsubmit = (ev) => {
-    ev.preventDefault();
-    const cat = state.selectedCat[type];
-    if (!cat) { alert(`Choose a ${type} category first.`); return; }
-
-    const amountCents = parseAmountToCents(amtInput.value);
-    if (amountCents <= 0) { alert('Enter a valid amount.'); return; }
-
-    const tx = {
-      id: idInput.value || crypto.randomUUID(),
-      type,
-      date: dateInput.value || todayISO(),
-      amountCents,
-      category: cat,
-      note: (noteInput.value || '').trim()
-    };
-
-    if (idInput.value) {
-      // update existing
-      const idx = state.transactions.findIndex(t => t.id === tx.id);
-      if (idx >= 0) state.transactions[idx] = tx;
-    } else {
-      state.transactions.push(tx);
-    }
-    save();
-    // reset
-    idInput.value = '';
-    amtInput.value = '';
-    noteInput.value = '';
-    dateInput.value = todayISO();
-
-    renderAll();
-  };
+//////////////////////////////////
+// Transactions render helpers  //
+//////////////////////////////////
+function monthTransactions(type /* 'Income' | 'Expense' */) {
+  return state.transactions
+    .filter(tx => tx.type === type && sameMonth(tx.date, state.selectedMonth))
+    .sort((a,b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+}
+function sumAmount(list) {
+  return list.reduce((acc, tx) => acc + (Number(tx.amount)||0), 0);
 }
 
-/* ---------------- Tables (per tab) ---------------- */
-function renderTable(type) {
-  const isInc = type === 'Income';
-  const tbody = isInc ? $('#incomeTbody') : $('#expenseTbody');
-  const totalEl = isInc ? $('#incomeTotal') : $('#expenseTotal');
-
-  const rows = byType(type).sort((a,b)=> a.date.localeCompare(b.date));
-  tbody.innerHTML = '';
-  let total = 0;
-
-  rows.forEach(tx => {
-    total += tx.amountCents;
-    const tr = document.createElement('tr');
-
-    const tdDate = document.createElement('td');
-    tdDate.className = 'nowrap';
-    const d = new Date(tx.date);
-    tdDate.textContent = d.toLocaleDateString('nl-BE');
-    tr.appendChild(tdDate);
-
-    const tdCat = document.createElement('td');
-    tdCat.textContent = tx.category;
-    tr.appendChild(tdCat);
-
-    const tdAmt = document.createElement('td');
-    tdAmt.className = 'right';
-    tdAmt.textContent = euro(tx.amountCents);
-    tr.appendChild(tdAmt);
-
-    const tdNote = document.createElement('td');
-    tdNote.textContent = tx.note || '';
-    tr.appendChild(tdNote);
-
-    const tdAct = document.createElement('td');
-    tdAct.className = 'actions';
-
-    const btnEdit = document.createElement('button');
-    btnEdit.className = 'ghost';
-    btnEdit.textContent = 'Edit';
-    btnEdit.onclick = () => {
-      state.selectedCat[type] = tx.category;
-      save();
-      // show tab
-      window.__activateTab(isInc ? 'income' : 'expenses');
-      // fill form
-      const idInput = isInc ? $('#incomeEditingId') : $('#expenseEditingId');
-      const dateInput = isInc ? $('#incomeDate') : $('#expenseDate');
-      const amtInput = isInc ? $('#incomeAmount') : $('#expenseAmount');
-      const noteInput = isInc ? $('#incomeNote') : $('#expenseNote');
-
-      idInput.value = tx.id;
-      dateInput.value = tx.date;
-      // back to decimal with comma per BE
-      amtInput.value = (tx.amountCents/100).toLocaleString('nl-BE', { minimumFractionDigits:2, maximumFractionDigits:2 });
-      noteInput.value = tx.note || '';
-      renderAll(); // refresh category highlight etc.
-    };
-
-    const btnDel = document.createElement('button');
-    btnDel.className = 'ghost';
-    btnDel.textContent = 'Delete';
-    btnDel.onclick = () => {
-      if (!confirm('Delete this transaction?')) return;
-      state.transactions = state.transactions.filter(t => t.id !== tx.id);
-      save();
-      renderAll();
-    };
-
-    tdAct.appendChild(btnEdit);
-    tdAct.appendChild(btnDel);
-    tr.appendChild(tdAct);
-
-    tbody.appendChild(tr);
-  });
-
-  totalEl.textContent = euro(total);
+function renderTables() {
+  // Income
+  if (el.incomeTbody && el.incomeTotal) {
+    const rows = monthTransactions('Income');
+    el.incomeTbody.innerHTML = rows.map(tx => rowHTML(tx)).join('');
+    el.incomeTotal.textContent = fmtMoney(sumAmount(rows));
+    bindRowActions();
+  }
+  // Expenses
+  if (el.expenseTbody && el.expenseTotal) {
+    const rows = monthTransactions('Expense');
+    el.expenseTbody.innerHTML = rows.map(tx => rowHTML(tx)).join('');
+    el.expenseTotal.textContent = fmtMoney(sumAmount(rows));
+    bindRowActions();
+  }
 }
 
-/* ---------------- Overview stats + chart ---------------- */
+function rowHTML(tx) {
+  return `
+    <tr data-id="${tx.id}">
+      <td class="nowrap">${tx.date.split('-').reverse().join('/')}</td>
+      <td>${escapeHTML(tx.category)}</td>
+      <td class="right">${fmtMoney(tx.amount)}</td>
+      <td>${escapeHTML(tx.note||'')}</td>
+      <td class="nowrap">
+        <button type="button" class="ghost btn-edit">Edit</button>
+        <button type="button" class="ghost btn-del">Delete</button>
+      </td>
+    </tr>
+  `;
+}
+function bindRowActions() {
+  $$('.btn-edit').forEach(b => b.addEventListener('click', onEdit));
+  $$('.btn-del').forEach(b => b.addEventListener('click', onDelete));
+}
+
+function onEdit(e) {
+  const tr = e.target.closest('tr');
+  if (!tr) return;
+  const id = tr.dataset.id;
+  const tx = state.transactions.find(t => String(t.id) === String(id));
+  if (!tx) return;
+
+  // Switch to the tab of this tx
+  setActiveTab(tx.type.toLowerCase());
+  selectedCategory = tx.category;
+  if (el.categoryDisplay) el.categoryDisplay.textContent = tx.category;
+
+  el.date.value   = tx.date;
+  el.amount.value = String(tx.amount).replace('.', ',');
+  el.note.value   = tx.note || '';
+  editingId = tx.id;
+  if (el.submitBtn) el.submitBtn.textContent = 'Update';
+}
+function onDelete(e) {
+  const tr = e.target.closest('tr');
+  if (!tr) return;
+  const id = tr.dataset.id;
+  const tx = state.transactions.find(t => String(t.id) === String(id));
+  if (!tx) return;
+  if (!confirm('Delete this transaction?')) return;
+
+  state.transactions = state.transactions.filter(t => String(t.id) !== String(id));
+  saveState();
+  render();
+}
+
+/////////////////////////////
+// Overview: stats + chart //
+/////////////////////////////
+let monthChart = null;
+
 function renderOverview() {
-  const inc = byType('Income').reduce((s,t)=>s+t.amountCents,0);
-  const exp = byType('Expense').reduce((s,t)=>s+t.amountCents,0);
-  $('#sumIncome').textContent = euro(inc);
-  $('#sumExpense').textContent = euro(exp);
-  $('#sumBalance').textContent = euro(inc-exp);
+  // stats
+  const inc = monthTransactions('Income');
+  const exp = monthTransactions('Expense');
+  const incSum = sumAmount(inc);
+  const expSum = sumAmount(exp);
+  const bal    = incSum - expSum;
 
-  // chart data per day
-  const [y,m] = state.selectedMonth.split('-').map(Number);
-  const daysInMonth = new Date(y, m, 0).getDate();
-  const labels = Array.from({length:daysInMonth}, (_,i)=>String(i+1));
-  const dailyInc = new Array(daysInMonth).fill(0);
-  const dailyExp = new Array(daysInMonth).fill(0);
+  if (el.sumIncome)  el.sumIncome.textContent  = fmtMoney(incSum);
+  if (el.sumExpense) el.sumExpense.textContent = fmtMoney(expSum);
+  if (el.sumBalance) el.sumBalance.textContent = fmtMoney(bal);
 
-  byType('Income').forEach(t => {
-    const d = new Date(t.date).getDate();
-    dailyInc[d-1] += t.amountCents/100;
-  });
-  byType('Expense').forEach(t => {
-    const d = new Date(t.date).getDate();
-    dailyExp[d-1] += t.amountCents/100;
-  });
+  // chart
+  if (!el.chartCanvas || typeof Chart === 'undefined') return;
 
-  const run = [];
-  let c = 0;
-  for (let i=0;i<daysInMonth;i++){
-    c += (dailyInc[i] - dailyExp[i]);
-    run.push(c);
+  const [year, month] = state.selectedMonth.split('-').map(Number);
+  const dCount = daysInMonth(year, month-1);
+  const labels = Array.from({length: dCount}, (_,i) => i+1);
+
+  const dailyIncome  = Array(dCount).fill(0);
+  const dailyExpense = Array(dCount).fill(0);
+  inc.forEach(t => { const d = Number(t.date.slice(-2)); dailyIncome[d-1]  += Number(t.amount)||0; });
+  exp.forEach(t => { const d = Number(t.date.slice(-2)); dailyExpense[d-1] += Number(t.amount)||0; });
+
+  const running = [];
+  let acc = 0;
+  for (let i=0;i<dCount;i++) {
+    acc += dailyIncome[i] - dailyExpense[i];
+    running.push(acc);
   }
 
-  const ctx = $('#monthChart').getContext('2d');
-  if (chart) chart.destroy();
-  chart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [
-        { label:'Income', data: dailyInc, borderColor:'#22c55e', backgroundColor:'rgba(34,197,94,.15)', tension:.2, fill:true },
-        { label:'Expenses', data: dailyExp, borderColor:'#ef4444', backgroundColor:'rgba(239,68,68,.15)', tension:.2, fill:true },
-        { label:'Running Balance', data: run, borderColor:'#3b82f6', tension:.2 }
-      ]
-    },
-    options: {
-      responsive:true,
-      maintainAspectRatio:false,
-      plugins:{ legend:{ display:true } },
-      scales: {
-        y: { beginAtZero:true, title:{ display:true, text:'€ per day' } }
+  const data = {
+    labels,
+    datasets: [
+      { label:'Income', data:dailyIncome, borderColor:'#22c55e', backgroundColor:'#22c55e30', tension:.2 },
+      { label:'Expenses', data:dailyExpense, borderColor:'#ef4444', backgroundColor:'#ef444430', tension:.2 },
+      { label:'Running Balance', data:running, borderColor:'#2563eb', backgroundColor:'#2563eb30', fill:false, tension:.2 }
+    ]
+  };
+
+  const options = {
+    responsive:true,
+    maintainAspectRatio:false,
+    scales: {
+      y: {
+        beginAtZero:true,
+        ticks: {
+          // show euros on left axis
+          callback: (v)=> EUR.format(v)
+        }
       }
-    }
-  });
+    },
+    plugins: { legend: { position:'top' } }
+  };
+
+  // ensure visible height
+  const parent = el.chartCanvas.parentElement;
+  if (parent && !parent.style.height) parent.style.height = '300px';
+
+  if (monthChart) { monthChart.destroy(); monthChart = null; }
+  monthChart = new Chart(el.chartCanvas.getContext('2d'), { type:'line', data, options });
 }
 
-/* ---------------- Master render ---------------- */
-function renderAll() {
-  // header month input already bound; just rebuild UI below
+/////////////////////////////
+// Form handling           //
+/////////////////////////////
+function currentType() {
+  return activeTab === 'income' ? 'Income'
+       : activeTab === 'expenses' ? 'Expense'
+       : 'Expense'; // default if someone tries from overview (we don't show the form there)
+}
+function clearForm() {
+  editingId = null;
+  selectedCategory = null;
+  if (el.categoryDisplay) el.categoryDisplay.textContent = '—';
+  if (el.date)   el.date.value = '';
+  if (el.amount) el.amount.value = '';
+  if (el.note)   el.note.value   = '';
+  if (el.submitBtn) el.submitBtn.textContent = 'Add';
+}
+function onSubmit(e) {
+  e.preventDefault();
+  if (activeTab === 'overview') {
+    alert('Use the Income or Expenses tab to add transactions.');
+    return;
+  }
+  const type = currentType();
+
+  if (!selectedCategory) {
+    alert('Choose a category.');
+    return;
+  }
+  const date   = el.date?.value || '';
+  const amount = parseMoneyInput(el.amount?.value || '');
+  const note   = el.note?.value || '';
+
+  if (!date)    { alert('Please choose a date.'); return; }
+  if (!amount)  { alert('Please enter an amount.'); return; }
+
+  if (editingId) {
+    // update
+    const tx = state.transactions.find(t => t.id === editingId);
+    if (!tx) return;
+    tx.type     = type;
+    tx.category = selectedCategory;
+    tx.date     = date;
+    tx.amount   = amount;
+    tx.note     = note;
+  } else {
+    // add
+    state.transactions.push({
+      id: Date.now() + Math.random().toString(36).slice(2),
+      type,
+      category: selectedCategory,
+      date,
+      amount,
+      note
+    });
+  }
+
+  saveState();
+  clearForm();
+  render();
+}
+
+/////////////////////////////
+// Rendering driver        //
+/////////////////////////////
+function render() {
+  // Stats + Chart
+  renderOverview();
+
+  // Category bars on tabs
   renderCategoryBar('Income');
   renderCategoryBar('Expense');
-  setupForm('Income');
-  setupForm('Expense');
-  renderTable('Income');
-  renderTable('Expense');
-  renderOverview();
+
+  // Tables
+  renderTables();
+
+  // Keep month input in sync if present
+  if (monthInputEl && monthInputEl.value !== state.selectedMonth) {
+    monthInputEl.value = state.selectedMonth;
+  }
 }
 
-/* Initial render */
-renderAll();
+/////////////////////////////
+// Init                    //
+/////////////////////////////
+function init() {
+  // Tabs (buttons with data-tab)
+  $$('.tabs .tab').forEach(btn => {
+    btn.addEventListener('click', () => setActiveTab(btn.dataset.tab));
+  });
+
+  // If HTML already set an active class, respect it, else default to overview
+  const activeBtn = $$('.tabs .tab').find(b => b.classList.contains('active')) || $('.tabs .tab');
+  activeTab = activeBtn?.dataset.tab || 'overview';
+
+  initMonthControl();
+
+  // Form
+  if (el.form) {
+    el.form.addEventListener('submit', onSubmit);
+  }
+  if (el.clearBtn) {
+    el.clearBtn.addEventListener('click', clearForm);
+  }
+
+  render();
+}
+
+/////////////////////////////
+// Escape for HTML safely  //
+/////////////////////////////
+function escapeHTML(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#039;');
+}
+
+document.addEventListener('DOMContentLoaded', init);
