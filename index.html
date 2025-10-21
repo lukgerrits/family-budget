@@ -5,15 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Family Budget</title>
 
-  <!-- Your stylesheet (keep your existing styles.css) -->
   <link rel="stylesheet" href="styles.css"/>
-
-  <!-- Chart.js for the Overview graph -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <style>
-    /* Minimal safety styles (your styles.css will override as needed) */
-    body { margin:0; font-family: -apple-system, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+    body { margin:0; font-family:-apple-system, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
     header { border-bottom:1px solid #e5e7eb; padding:12px 16px; }
     .topline { display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
     .monthbar { display:flex; gap:8px; align-items:center; }
@@ -23,7 +19,7 @@
     main { padding:14px 16px; }
     section.tabpanel { display:none; }
     section.tabpanel.active { display:block; }
-    .stats { display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; margin:10px 0 14px; }
+    .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:10px 0 14px; }
     .stat { border:1px solid #e5e7eb; border-radius:10px; padding:10px; }
     .stat .label { color:#6b7280; font-size:12px; }
     .stat .value { font-weight:700; font-size:18px; }
@@ -33,11 +29,12 @@
     th.right, td.right { text-align:right; }
     td.nowrap { white-space:nowrap; }
     .card { border:1px solid #e5e7eb; border-radius:10px; padding:12px; margin-top:18px; }
-    .row { display:grid; grid-template-columns: 120px 1fr; gap:10px; align-items:center; margin:8px 0; }
+    .row { display:grid; grid-template-columns:130px 1fr; gap:10px; align-items:center; margin:8px 0; }
     input, select, button { font-size:1rem; padding:8px; border:1px solid #e5e7eb; border-radius:8px; }
     button.primary { background:#2563eb; color:#fff; border-color:#2563eb; }
     button.ghost { background:#fff; }
     .btnrow { display:flex; gap:10px; }
+    .badge { display:inline-block; padding:4px 8px; border:1px solid #e5e7eb; border-radius:999px; background:#f8fafc; font-size:0.9rem; }
   </style>
 </head>
 <body>
@@ -60,7 +57,7 @@
   </header>
 
   <main>
-    <!-- ================= OVERVIEW ================= -->
+    <!-- ============== OVERVIEW ============== -->
     <section id="tab-overview" class="tabpanel active">
       <div class="stats">
         <div class="stat">
@@ -81,7 +78,7 @@
       <canvas id="monthChart" height="140"></canvas>
     </section>
 
-    <!-- ================= INCOME ================= -->
+    <!-- ============== INCOME ============== -->
     <section id="tab-income" class="tabpanel">
       <h2 style="margin:0 0 10px;">Income</h2>
       <table class="list">
@@ -105,7 +102,7 @@
       </table>
     </section>
 
-    <!-- ================= EXPENSES ================= -->
+    <!-- ============== EXPENSES ============== -->
     <section id="tab-expenses" class="tabpanel">
       <h2 style="margin:0 0 10px;">Expenses</h2>
       <table class="list">
@@ -129,18 +126,10 @@
       </table>
     </section>
 
-    <!-- ================= ADD / EDIT FORM (single, simple) ================= -->
+    <!-- ============== ADD / EDIT FORM ============== -->
     <section class="card">
-      <h2 style="margin:0 0 10px;">Add / Edit Transaction</h2>
+      <h2 style="margin:0 0 10px;">Add / Edit Transaction <span id="formTypeBadge" class="badge"></span></h2>
       <form id="txForm" autocomplete="off">
-        <div class="row">
-          <label for="txType">Type</label>
-          <select id="txType" required>
-            <option value="Income">Income</option>
-            <option value="Expense" selected>Expense</option>
-          </select>
-        </div>
-
         <div class="row">
           <label for="txDate">Date</label>
           <input type="date" id="txDate" required />
@@ -148,7 +137,10 @@
 
         <div class="row">
           <label for="txCategory">Category</label>
-          <input type="text" id="txCategory" placeholder="e.g. Groceries / Salary" required />
+          <!-- Will be populated with categories of the current tab type -->
+          <select id="txCategory" required>
+            <option value="" disabled selected>Select category</option>
+          </select>
         </div>
 
         <div class="row">
@@ -169,7 +161,7 @@
     </section>
   </main>
 
-  <!-- Tabs wiring + helper for app.js -->
+  <!-- Tabs wiring + a helper used by app.js -->
   <script>
     (function(){
       const tabs = Array.from(document.querySelectorAll('nav.tabs .tab'));
@@ -182,26 +174,23 @@
       function activate(name){
         tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === name));
         Object.entries(panels).forEach(([key,el]) => el.classList.toggle('active', key === name));
-        // optional scroll to top of panel
-        // panels[name].scrollIntoView({behavior:'smooth', block:'start'});
+        // inform app.js of tab change so it can set type + categories
+        if (window.onTabActivated) window.onTabActivated(name);
       }
 
       tabs.forEach(btn => btn.addEventListener('click', () => activate(btn.dataset.tab)));
 
       // Helper used by app.js when you click "Edit" on a row:
       window.showFormTabForType = function(type){
-        if (/income/i.test(type)) activate('income');
-        else activate('expenses');
-        // focus the form category or amount for quick edit
-        setTimeout(() => {
-          const el = document.getElementById('txCategory') || document.getElementById('txAmount');
-          if (el) el.focus();
-        }, 0);
+        activate(/income/i.test(type) ? 'income' : 'expenses');
+        setTimeout(() => { document.getElementById('txCategory')?.focus(); }, 0);
       };
+
+      // Initial badge/categories set
+      if (window.onTabActivated) window.onTabActivated('overview');
     })();
   </script>
 
-  <!-- Your application logic -->
   <script src="app.js"></script>
 </body>
 </html>
