@@ -25,6 +25,14 @@
       <button class="tab" data-tab="income">Income</button>
       <button class="tab" data-tab="expenses">Expenses</button>
     </nav>
+    
+    <div class="backupbar">
+  <button id="btnExport" type="button" class="ghost">Export backup</button>
+
+  <!-- Pretty “Import” button with hidden file input -->
+  <label for="fileImport" class="ghost filebtn">Import backup</label>
+  <input id="fileImport" type="file" accept="application/json" style="display:none" />
+</div>
   </header>
 
   <main>
