@@ -1,8 +1,12 @@
 /* ==========================================================
-   Family Budget – app.js (tab-driven type & categories)
+   Family Budget – app.js
+   - Tab-driven type
+   - Category chips with + New
+   - No transaction list on Overview
    ========================================================== */
 
 const $ = (s) => document.querySelector(s);
+
 function isoDate(d = new Date()) {
   const p = (n) => String(n).padStart(2,'0');
   return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
@@ -11,16 +15,44 @@ function formatMoney(n){ return Number(n||0).toLocaleString('nl-BE',{style:'curr
 function uid(){ return Math.random().toString(36).slice(2,9)+Date.now().toString(36); }
 function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g,m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
 
-const STORAGE_KEY='family-budget/v1';
+const STORAGE_KEY='family-budget/v2';
 let state = load();
+
 function load(){
   try{
     const raw=localStorage.getItem(STORAGE_KEY);
-    const base={selectedMonth:isoDate().slice(0,7),transactions:[]};
-    if(!raw) return base;
-    const p=JSON.parse(raw); p.transactions=Array.isArray(p.transactions)?p.transactions:[];
+    const base={
+      selectedMonth: isoDate().slice(0,7),
+      transactions: [],
+      categories: { Income: ['Salary'], Expense: ['Groceries','Rent','Utilities'] }
+    };
+    if(!raw) {
+      return base;
+    }
+    const p=JSON.parse(raw);
+    // shape safety
+    p.transactions = Array.isArray(p.transactions)?p.transactions:[];
+    if(!p.categories || typeof p.categories!=='object'){
+      p.categories = { Income:[], Expense:[] };
+    }
+    // if categories missing, seed from transactions
+    ['Income','Expense'].forEach(t=>{
+      if(!Array.isArray(p.categories[t])) p.categories[t]=[];
+    });
+    if (p.categories.Income.length===0 || p.categories.Expense.length===0){
+      const fromTx = { Income:new Set(), Expense:new Set() };
+      (p.transactions||[]).forEach(tx=>{ if(fromTx[tx.type]) fromTx[tx.type].add(tx.category||''); });
+      if (p.categories.Income.length===0) p.categories.Income = Array.from(fromTx.Income).filter(Boolean);
+      if (p.categories.Expense.length===0) p.categories.Expense = Array.from(fromTx.Expense).filter(Boolean);
+    }
     return {...base,...p};
-  }catch{ return {selectedMonth:isoDate().slice(0,7),transactions:[]}; }
+  }catch{
+    return {
+      selectedMonth: isoDate().slice(0,7),
+      transactions: [],
+      categories: { Income: ['Salary'], Expense: ['Groceries','Rent','Utilities'] }
+    };
+  }
 }
 function save(){ localStorage.setItem(STORAGE_KEY,JSON.stringify(state)); }
 
@@ -29,7 +61,7 @@ let currentTab = 'overview';
 function currentFormType(){
   return currentTab==='income' ? 'Income'
        : currentTab==='expenses' ? 'Expense'
-       : 'Expense'; // default when on Overview
+       : 'Expense';
 }
 
 /* ---------- Month picker & today ---------- */
@@ -45,21 +77,43 @@ $('#btnToday')?.addEventListener('click',()=>{
   const d=$('#txDate'); if(d) d.value=isoDate(new Date());
 });
 
-/* ---------- Populate categories for current type ---------- */
-function uniqueCategoriesForType(type){
-  const set=new Set();
-  state.transactions.forEach(t=>{ if(t.type===type) set.add(t.category||''); });
-  return Array.from(set).filter(Boolean).sort((a,b)=>a.localeCompare(b,'nl'));
-}
-function populateCategorySelect(){
-  const sel = $('#txCategory'); if(!sel) return;
+/* ---------- Category Chips ---------- */
+let selectedCategory = ''; // the chip the user clicked
+
+function renderCategoryChips(){
+  const wrap = $('#catChips'); if(!wrap) return;
   const type = currentFormType();
-  const opts = uniqueCategoriesForType(type);
-  const existing = sel.value; // keep choice if still valid
-  sel.innerHTML = `<option value="" disabled ${existing?'':'selected'}>Select category</option>` +
-    opts.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
-  if (opts.includes(existing)) sel.value = existing;
+  const cats = [...new Set((state.categories[type]||[]).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'nl'));
+
+  wrap.innerHTML = cats.map(c => `
+    <button type="button" class="chip ${selectedCategory===c?'active':''}" data-cat="${escapeHtml(c)}">${escapeHtml(c)}</button>
+  `).join('');
+
+  wrap.querySelectorAll('.chip').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      selectedCategory = btn.dataset.cat;
+      wrap.querySelectorAll('.chip').forEach(b=>b.classList.toggle('active', b===btn));
+    });
+  });
 }
+
+$('#addCatBtn')?.addEventListener('click', ()=>{
+  const type = currentFormType();
+  const name = prompt(`New ${type} category name:`);
+  if (!name) return;
+  const clean = name.trim();
+  if (!clean) return;
+
+  if (!state.categories[type]) state.categories[type]=[];
+  if (!state.categories[type].includes(clean)) {
+    state.categories[type].push(clean);
+    save();
+  }
+  selectedCategory = clean;
+  renderCategoryChips();
+});
+
+/* ---------- Expose tab-change hook from HTML ---------- */
 function setFormTypeBadge(){
   const b = $('#formTypeBadge'); if(!b) return;
   const t = currentFormType();
@@ -67,12 +121,16 @@ function setFormTypeBadge(){
   b.style.borderColor = t==='Income' ? '#16a34a' : '#b91c1c';
   b.style.color      = t==='Income' ? '#166534' : '#7f1d1d';
 }
-
-/* ---------- Expose tab-change hook from HTML ---------- */
 window.onTabActivated = function(name){
   currentTab = name;
   setFormTypeBadge();
-  populateCategorySelect();
+  if (currentTab==='overview') {
+    // keep form usable but default to Expense
+    selectedCategory = '';
+  } else {
+    selectedCategory = '';
+  }
+  renderCategoryChips();
 };
 
 /* ---------- Add/Edit/Delete ---------- */
@@ -81,35 +139,49 @@ let editId = null;
 function enterEditMode(tx){
   editId = tx.id;
   $('#txDate').value = tx.date || isoDate();
-  populateCategorySelect(); // ensure list is ready for that type
-  $('#txCategory').value = tx.category || '';
+  // ensure category exists in current type set, switch to that tab
+  window.onTabActivated?.(tx.type==='Income' ? 'income' : 'expenses');
+  if (!state.categories[tx.type]) state.categories[tx.type]=[];
+  if (!state.categories[tx.type].includes(tx.category)) {
+    state.categories[tx.type].push(tx.category);
+    save();
+  }
+  selectedCategory = tx.category;
+  renderCategoryChips();
   $('#txAmount').value = String(tx.amount).replace('.',',');
   $('#txNote').value = tx.note || '';
   $('#txSubmit').textContent='Save';
   $('#clearForm').textContent='Cancel';
-  // switch to correct tab
-  window.showFormTabForType?.(tx.type);
 }
 
 function exitEditMode(){
   editId=null;
   $('#txSubmit').textContent='Add';
   $('#clearForm').textContent='Clear';
+  selectedCategory='';
+  renderCategoryChips();
 }
 
 const form = $('#txForm');
 form?.addEventListener('submit',(e)=>{
   e.preventDefault();
   const type = currentFormType();
+
+  if (!selectedCategory) {
+    alert('Please choose a category (or add a new one).');
+    return;
+  }
+
+  const amount = Number(String($('#txAmount').value||'0').replace(/\./g,'').replace(',','.'));
+  if (isNaN(amount)) { alert('Enter a valid amount'); return; }
+
   const tx = {
     type,
     date: $('#txDate').value || isoDate(),
-    category: $('#txCategory').value || '',
-    amount: Number(String($('#txAmount').value||'0').replace(/\./g,'').replace(',','.')),
+    category: selectedCategory,
+    amount,
     note: $('#txNote').value || ''
   };
-  if(!tx.category){ alert('Choose a category'); return; }
-  if(isNaN(tx.amount)){ alert('Enter a valid amount'); return; }
 
   if(editId){
     const i=state.transactions.findIndex(t=>t.id===editId);
@@ -118,17 +190,22 @@ form?.addEventListener('submit',(e)=>{
   }else{
     state.transactions.push({id:uid(),...tx});
   }
+  // persist category if it is new
+  if (!state.categories[type]) state.categories[type]=[];
+  if (!state.categories[type].includes(selectedCategory)) {
+    state.categories[type].push(selectedCategory);
+  }
+
   save(); renderAll();
   form.reset();
   $('#txDate').value = isoDate();
-  populateCategorySelect(); // may add new category in list
 });
+
 $('#clearForm')?.addEventListener('click',(e)=>{
   e.preventDefault();
   if(editId) exitEditMode();
   form.reset();
   $('#txDate').value = isoDate();
-  populateCategorySelect();
 });
 
 /* ---------- Overview totals & chart ---------- */
@@ -178,7 +255,7 @@ function drawChart(){
   }
 }
 
-/* ---------- Tables ---------- */
+/* ---------- Tables on Income/Expenses tabs ---------- */
 function rowHtml(tx){
   return `<tr data-id="${tx.id}">
     <td>${escapeHtml(tx.date)}</td>
@@ -222,7 +299,7 @@ function renderExpenseTable(){
 /* ---------- Render all ---------- */
 function renderAll(){
   setFormTypeBadge();
-  populateCategorySelect();
+  renderCategoryChips();
   renderSummary();
   drawChart();
   renderIncomeTable();
