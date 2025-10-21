@@ -1,246 +1,231 @@
-{\rtf1\ansi\ansicpg1252\cocoartf2822
-\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
-{\colortbl;\red255\green255\blue255;}
-{\*\expandedcolortbl;;}
-\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
-\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+/* ============== Storage helpers ============== */
+const LS_KEY = 'fb_data_v1';
+function loadState() {
+  const def = {
+    categories: { income: ['Salary', 'Other'], expense: ['Groceries', 'Rent', 'Other'] },
+    transactions: [] // {type:'income'|'expense', date:'YYYY-MM-DD', category:'', amount: number, note:''}
+  };
+  try {
+    return JSON.parse(localStorage.getItem(LS_KEY)) || def;
+  } catch { return def; }
+}
+function saveState() { localStorage.setItem(LS_KEY, JSON.stringify(state)); }
+let state = loadState();
 
-\f0\fs24 \cf0 // ---------- Helpers ----------\
-const LOCALE = navigator.language || 'nl-BE';\
-const CURRENCY = (Intl.NumberFormat().resolvedOptions().currency) || 'EUR';\
-const fmt = new Intl.NumberFormat(LOCALE, \{ style: 'currency', currency: CURRENCY \});\
-\
-const store = \{\
-  read(key, fallback) \{ try \{ return JSON.parse(localStorage.getItem(key) ?? JSON.stringify(fallback)); \} catch \{ return fallback; \} \},\
-  write(key, val) \{ localStorage.setItem(key, JSON.stringify(val)); \}\
-\};\
-\
-const DATA = \{\
-  // transactions: [\{id, date:'YYYY-MM-DD', type:'income'|'expense', category, amount(number), note\}]\
-  get tx() \{ return store.read('tx', []); \},\
-  set tx(v) \{ store.write('tx', v); \},\
-\
-  // categories: \{ income: [name], expense: [name] \}\
-  get cats() \{ return store.read('cats', \{ income: ['Salary'], expense: ['Groceries','Rent','Utilities'] \}); \},\
-  set cats(v) \{ store.write('cats', v); \}\
-\};\
-\
-// ---------- DOM ----------\
-const els = \{\
-  monthPicker: document.getElementById('monthPicker'),\
-  resetMonth: document.getElementById('resetMonth'),\
-  sumIncome: document.getElementById('sumIncome'),\
-  sumExpense: document.getElementById('sumExpense'),\
-  sumBalance: document.getElementById('sumBalance'),\
-  txForm: document.getElementById('txForm'),\
-  txType: document.getElementById('txType'),\
-  txDate: document.getElementById('txDate'),\
-  txCategory: document.getElementById('txCategory'),\
-  txAmount: document.getElementById('txAmount'),\
-  txNote: document.getElementById('txNote'),\
-  clearForm: document.getElementById('clearForm'),\
-  filterType: document.getElementById('filterType'),\
-  txTbody: document.getElementById('txTbody'),\
-  catForm: document.getElementById('catForm'),\
-  catKind: document.getElementById('catKind'),\
-  catName: document.getElementById('catName'),\
-  expenseCatList: document.getElementById('expenseCatList'),\
-  incomeCatList: document.getElementById('incomeCatList'),\
-  exportBtn: document.getElementById('exportBtn'),\
-  importBtn: document.getElementById('importBtn'),\
-  importFile: document.getElementById('importFile'),\
-\};\
-\
-// ---------- Init ----------\
-function todayISO() \{\
-  const d = new Date();\
-  d.setHours(0,0,0,0);\
-  return d.toISOString().slice(0,10);\
-\}\
-function monthISO(d = new Date()) \{\
-  return `$\{d.getFullYear()\}-$\{String(d.getMonth()+1).padStart(2,'0')\}`;\
-\}\
-\
-function setDefaultMonth() \{\
-  els.monthPicker.value = monthISO(new Date());\
-\}\
-\
-function loadCategoriesSelect() \{\
-  const kind = els.txType.value;\
-  const list = DATA.cats[kind] || [];\
-  els.txCategory.innerHTML = list.map(c => `<option value="$\{c\}">$\{c\}</option>`).join('');\
-\}\
-\
-function refreshCategoryPills() \{\
-  const exp = DATA.cats.expense || [];\
-  const inc = DATA.cats.income || [];\
-  els.expenseCatList.innerHTML = exp.map(c => `<li>$\{c\} <button data-kind="expense" data-name="$\{c\}">\uc0\u55357 \u56785 </button></li>`).join('');\
-  els.incomeCatList.innerHTML  = inc.map(c => `<li>$\{c\} <button data-kind="income" data-name="$\{c\}">\uc0\u55357 \u56785 </button></li>`).join('');\
-\}\
-\
-function parseAmount(input) \{\
-  // Accept both "12,34" and "12.34"\
-  const cleaned = String(input).trim().replace(/\\s/g,'').replace(',', '.');\
-  const n = Number(cleaned);\
-  if (Number.isFinite(n)) return n;\
-  return NaN;\
-\}\
-\
-function monthRange(ym) \{\
-  // ym = 'YYYY-MM'\
-  const [y,m] = ym.split('-').map(Number);\
-  const start = new Date(y, m-1, 1);\
-  const end = new Date(y, m, 0); // last day\
-  return \{ start, end \};\
-\}\
-\
-function inMonth(dateStr, ym) \{\
-  return dateStr.startsWith(ym + '-');\
-\}\
-\
-function recompute() \{\
-  const ym = els.monthPicker.value || monthISO(new Date());\
-  const filter = els.filterType.value; // all | income | expense\
-  const rows = DATA.tx\
-    .filter(t => inMonth(t.date, ym))\
-    .filter(t => filter === 'all' ? true : t.type === filter)\
-    .sort((a,b) => (a.date < b.date ? 1 : -1));\
-\
-  // Totals (whole month, regardless of filter)\
-  const monthRows = DATA.tx.filter(t => inMonth(t.date, ym));\
-  const sumInc = monthRows.filter(t => t.type === 'income').reduce((acc,t)=>acc+t.amount,0);\
-  const sumExp = monthRows.filter(t => t.type === 'expense').reduce((acc,t)=>acc+t.amount,0);\
-  const bal = sumInc - sumExp;\
-\
-  els.sumIncome.textContent = fmt.format(sumInc);\
-  els.sumExpense.textContent = fmt.format(sumExp);\
-  els.sumBalance.textContent = fmt.format(bal);\
-\
-  // Render table\
-  els.txTbody.innerHTML = rows.map(t => `\
-    <tr>\
-      <td>$\{t.date\}</td>\
-      <td>$\{t.type === 'income' ? 'Income' : 'Expense'\}</td>\
-      <td>$\{t.category\}</td>\
-      <td class="right">$\{fmt.format(t.amount)\}</td>\
-      <td>$\{t.note ? t.note.replace(/</g,'&lt;') : ''\}</td>\
-      <td><button class="ghost" data-del="$\{t.id\}">\uc0\u55357 \u56785 </button></td>\
-    </tr>\
-  `).join('');\
-\}\
-\
-function addTransaction(evt) \{\
-  evt.preventDefault();\
-  const type = els.txType.value;\
-  const date = els.txDate.value;\
-  const category = els.txCategory.value;\
-  const amount = parseAmount(els.txAmount.value);\
-  const note = els.txNote.value.trim();\
-\
-  if (!date || !category || !Number.isFinite(amount)) \{\
-    alert('Please fill date, category, and a valid amount.');\
-    return;\
-  \}\
-\
-  const tx = DATA.tx;\
-  tx.push(\{ id: crypto.randomUUID(), type, date, category, amount, note \});\
-  DATA.tx = tx;\
-  els.txForm.reset();\
-  els.txType.value = 'expense';\
-  els.txDate.value = todayISO();\
-  loadCategoriesSelect();\
-  recompute();\
-\}\
-\
-function deleteRow(id) \{\
-  const tx = DATA.tx.filter(t => t.id !== id);\
-  DATA.tx = tx;\
-  recompute();\
-\}\
-\
-function addCategory(evt) \{\
-  evt.preventDefault();\
-  const kind = els.catKind.value;\
-  const name = els.catName.value.trim();\
-  if (!name) return;\
-  const cats = DATA.cats;\
-  if (!cats[kind].includes(name)) cats[kind].push(name);\
-  DATA.cats = cats;\
-  els.catName.value = '';\
-  refreshCategoryPills();\
-  loadCategoriesSelect();\
-\}\
-\
-// ---------- Export / Import JSON ----------\
-function doExport() \{\
-  const blob = new Blob([JSON.stringify(\{ tx: DATA.tx, cats: DATA.cats \}, null, 2)], \{ type: 'application/json' \});\
-  const a = document.createElement('a');\
-  a.href = URL.createObjectURL(blob);\
-  a.download = `budget-backup-$\{new Date().toISOString().slice(0,10)\}.json`;\
-  a.click();\
-\}\
-\
-function doImport(file) \{\
-  const reader = new FileReader();\
-  reader.onload = () => \{\
-    try \{\
-      const obj = JSON.parse(reader.result);\
-      if (obj.tx && obj.cats) \{\
-        DATA.tx = obj.tx;\
-        DATA.cats = obj.cats;\
-        refreshCategoryPills();\
-        loadCategoriesSelect();\
-        recompute();\
-        alert('Import successful.');\
-      \} else \{\
-        alert('Invalid file format.');\
-      \}\
-    \} catch \{\
-      alert('Invalid JSON.');\
-    \}\
-  \};\
-  reader.readAsText(file);\
-\}\
-\
-// ---------- Wire up ----------\
-function init() \{\
-  setDefaultMonth();\
-  els.txDate.value = todayISO();\
-  loadCategoriesSelect();\
-  refreshCategoryPills();\
-  recompute();\
-\
-  els.txForm.addEventListener('submit', addTransaction);\
-  els.clearForm.addEventListener('click', () => \{ els.txForm.reset(); els.txType.value='expense'; els.txDate.value=todayISO(); loadCategoriesSelect(); \});\
-\
-  els.monthPicker.addEventListener('change', recompute);\
-  els.resetMonth.addEventListener('click', () => \{ setDefaultMonth(); recompute(); \});\
-  els.filterType.addEventListener('change', recompute);\
-  els.txType.addEventListener('change', loadCategoriesSelect);\
-\
-  els.txTbody.addEventListener('click', (e) => \{\
-    const id = e.target.getAttribute('data-del');\
-    if (id && confirm('Delete this transaction?')) deleteRow(id);\
-  \});\
-\
-  els.catForm.addEventListener('submit', addCategory);\
-  document.addEventListener('click', (e) => \{\
-    if (e.target.matches('ul.pill-list button')) \{\
-      const kind = e.target.getAttribute('data-kind');\
-      const name = e.target.getAttribute('data-name');\
-      const cats = DATA.cats;\
-      cats[kind] = cats[kind].filter(c => c !== name);\
-      DATA.cats = cats;\
-      refreshCategoryPills();\
-      loadCategoriesSelect();\
-    \}\
-  \});\
-\
-  els.exportBtn.addEventListener('click', doExport);\
-  els.importBtn.addEventListener('click', () => els.importFile.click());\
-  els.importFile.addEventListener('change', () => \{\
-    if (els.importFile.files?.[0]) doImport(els.importFile.files[0]);\
-  \});\
-\}\
-\
-document.addEventListener('DOMContentLoaded', init);}
+/* ============== DOM refs ============== */
+const monthPicker = document.getElementById('monthPicker');
+const btnToday = document.getElementById('btnToday');
+
+const tabs = document.querySelectorAll('.tab');
+const panels = {
+  overview: document.getElementById('tab-overview'),
+  income: document.getElementById('tab-income'),
+  expenses: document.getElementById('tab-expenses')
+};
+
+const sumIncome = document.getElementById('sumIncome');
+const sumExpense = document.getElementById('sumExpense');
+const sumBalance = document.getElementById('sumBalance');
+const txList = document.getElementById('txList');
+
+const incomeCatsEl = document.getElementById('incomeCats');
+const expenseCatsEl = document.getElementById('expenseCats');
+const incomeDL = document.getElementById('incomeCatDatalist');
+const expenseDL = document.getElementById('expenseCatDatalist');
+
+const formIncome = document.getElementById('formIncome');
+const formExpense = document.getElementById('formExpense');
+document.getElementById('clearIncomeForm').onclick = () => formIncome.reset();
+document.getElementById('clearExpenseForm').onclick = () => formExpense.reset();
+
+document.getElementById('btnAddIncomeCat').onclick  = () => addCategory('income');
+document.getElementById('btnAddExpenseCat').onclick = () => addCategory('expense');
+
+/* ============== Month handling ============== */
+function setMonthToToday() {
+  const d = new Date();
+  const ym = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  monthPicker.value = ym;
+}
+if (!monthPicker.value) setMonthToToday();
+
+btnToday.addEventListener('click', () => {
+  // Set today's date in all visible forms
+  const today = new Date();
+  const iso = today.toISOString().slice(0,10);
+  document.querySelectorAll('section.tabpanel.active input[type="date"]').forEach(i => i.value = iso);
+});
+
+monthPicker.addEventListener('change', redrawAll);
+
+/* ============== Tabs ============== */
+tabs.forEach(btn => btn.addEventListener('click', () => {
+  tabs.forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  const tab = btn.dataset.tab;
+  Object.values(panels).forEach(p => p.classList.remove('active'));
+  panels[tab].classList.add('active');
+  redrawAll();
+}));
+
+/* ============== Categories ============== */
+function renderCategoryChips() {
+  // buttons (chips)
+  incomeCatsEl.innerHTML  = '';
+  expenseCatsEl.innerHTML = '';
+  state.categories.income.forEach(c => addChip(incomeCatsEl, c, 'income'));
+  state.categories.expense.forEach(c => addChip(expenseCatsEl, c, 'expense'));
+
+  // datalists (for typing/autocomplete)
+  incomeDL.innerHTML  = state.categories.income.map(c => `<option value="${c}">`).join('');
+  expenseDL.innerHTML = state.categories.expense.map(c => `<option value="${c}">`).join('');
+}
+function addChip(container, name, type) {
+  const chip = document.createElement('button');
+  chip.type = 'button';
+  chip.className = 'chip';
+  chip.textContent = name;
+  chip.onclick = () => {
+    container.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    const form = (type === 'income') ? formIncome : formExpense;
+    form.category.value = name;
+  };
+  container.appendChild(chip);
+}
+function addCategory(type) {
+  const name = prompt(`New ${type} category name:`);
+  if (!name) return;
+  const arr = state.categories[type];
+  if (!arr.includes(name)) {
+    arr.push(name);
+    saveState();
+    renderCategoryChips();
+  }
+}
+
+/* ============== Add Transactions ============== */
+function formToTx(form) {
+  const f = new FormData(form);
+  const tx = Object.fromEntries(f.entries());
+  tx.amount = Number(tx.amount);
+  if (!tx.date) tx.date = new Date().toISOString().slice(0,10);
+  return tx;
+}
+formIncome.addEventListener('submit', e => {
+  e.preventDefault();
+  const tx = formToTx(formIncome);
+  if (!tx.category) return alert('Pick or type a category');
+  state.transactions.push(tx);
+  saveState();
+  formIncome.reset();
+  redrawAll();
+});
+formExpense.addEventListener('submit', e => {
+  e.preventDefault();
+  const tx = formToTx(formExpense);
+  if (!tx.category) return alert('Pick or type a category');
+  state.transactions.push(tx);
+  saveState();
+  formExpense.reset();
+  redrawAll();
+});
+
+/* ============== Month filtering & sums ============== */
+function monthBounds(ym) {
+  const [y,m] = ym.split('-').map(Number);
+  const start = new Date(y, m-1, 1);
+  const end   = new Date(y, m, 0); // last day
+  return {start, end};
+}
+function txForMonth(ym) {
+  const {start, end} = monthBounds(ym);
+  return state.transactions.filter(t => {
+    const d = new Date(t.date);
+    return d >= start && d <= end;
+  }).sort((a,b) => new Date(a.date) - new Date(b.date));
+}
+function euro(n) {
+  return (n||0).toLocaleString('nl-BE', {style:'currency', currency:'EUR'});
+}
+
+/* ============== Chart ============== */
+let chart;
+function drawChart(ym, txs) {
+  const {end} = monthBounds(ym);
+  const days = end.getDate();
+
+  const incomePerDay  = Array(days).fill(0);
+  const expensePerDay = Array(days).fill(0);
+
+  txs.forEach(t => {
+    const day = new Date(t.date).getDate() - 1;
+    if (t.type === 'income') incomePerDay[day] += t.amount;
+    else expensePerDay[day] += t.amount;
+  });
+
+  // Running balance (income - expense) cumulated
+  const balance = [];
+  let run = 0;
+  for (let i=0;i<days;i++) {
+    run += incomePerDay[i] - expensePerDay[i];
+    balance.push(run);
+  }
+
+  const labels = Array.from({length:days}, (_,i)=> String(i+1));
+
+  const ctx = document.getElementById('monthChart').getContext('2d');
+  if (chart) chart.destroy();
+  chart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label:'Income',  data:incomePerDay,  yAxisID:'y', backgroundColor:'rgba(16,152,69,0.45)' },
+        { label:'Expenses',data:expensePerDay, yAxisID:'y', backgroundColor:'rgba(176,0,32,0.45)' },
+        { label:'Running Balance', data:balance, type:'line', borderColor:'#2563eb', fill:false, yAxisID:'y1' }
+      ]
+    },
+    options: {
+      responsive:true,
+      scales: {
+        y: { beginAtZero:true, title:{display:true,text:'€ per day'} },
+        y1:{ position:'right', beginAtZero:true, grid:{drawOnChartArea:false}, title:{display:true,text:'€ balance'} }
+      },
+      plugins: { legend:{position:'top'} }
+    }
+  });
+}
+
+/* ============== Overview rendering ============== */
+function renderOverview(ym) {
+  const txs = txForMonth(ym);
+  const inc = txs.filter(t=>t.type==='income').reduce((a,b)=>a+b.amount,0);
+  const exp = txs.filter(t=>t.type==='expense').reduce((a,b)=>a+b.amount,0);
+  sumIncome.textContent  = euro(inc);
+  sumExpense.textContent = euro(exp);
+  sumBalance.textContent = euro(inc-exp);
+
+  txList.innerHTML = txs.map(t => `
+    <li>
+      <div>
+        <div><strong>${t.category||'-'}</strong> <span class="muted">(${t.type})</span></div>
+        <div class="muted">${new Date(t.date).toLocaleDateString('nl-BE')} ${t.note?('· '+t.note):''}</div>
+      </div>
+      <div style="min-width:90px;text-align:right;">${euro(t.type==='income'?t.amount:-t.amount)}</div>
+    </li>
+  `).join('');
+
+  drawChart(ym, txs);
+}
+
+/* ============== Boot ============== */
+function redrawAll() {
+  renderCategoryChips();
+  const ym = monthPicker.value || new Date().toISOString().slice(0,7);
+  renderOverview(ym);
+  // Pre-fill today on active tab’s date input for convenience
+  const today = new Date().toISOString().slice(0,10);
+  document.querySelectorAll('section.tabpanel.active input[type="date"]').forEach(i => { if (!i.value) i.value = today; });
+}
+redrawAll();
