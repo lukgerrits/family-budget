@@ -19,22 +19,35 @@
     main { padding:14px 16px; }
     section.tabpanel { display:none; }
     section.tabpanel.active { display:block; }
+
     .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:10px 0 14px; }
     .stat { border:1px solid #e5e7eb; border-radius:10px; padding:10px; }
     .stat .label { color:#6b7280; font-size:12px; }
     .stat .value { font-weight:700; font-size:18px; }
     .green { color:#0a7f2e; } .red { color:#b00020; }
+
     table { width:100%; border-collapse:collapse; }
     th, td { border-bottom:1px solid #e5e7eb; padding:8px; text-align:left; }
     th.right, td.right { text-align:right; }
     td.nowrap { white-space:nowrap; }
+
     .card { border:1px solid #e5e7eb; border-radius:10px; padding:12px; margin-top:18px; }
     .row { display:grid; grid-template-columns:130px 1fr; gap:10px; align-items:center; margin:8px 0; }
     input, select, button { font-size:1rem; padding:8px; border:1px solid #e5e7eb; border-radius:8px; }
     button.primary { background:#2563eb; color:#fff; border-color:#2563eb; }
     button.ghost { background:#fff; }
     .btnrow { display:flex; gap:10px; }
+
     .badge { display:inline-block; padding:4px 8px; border:1px solid #e5e7eb; border-radius:999px; background:#f8fafc; font-size:0.9rem; }
+
+    /* Category chips */
+    .chipbar { display:flex; flex-wrap:wrap; gap:8px; }
+    .chip {
+      padding:6px 10px; border:1px solid #e5e7eb; border-radius:999px;
+      background:#f9fafb; cursor:pointer; user-select:none;
+    }
+    .chip.active { background:#2563eb; color:#fff; border-color:#2563eb; }
+    .chip.add { background:#fff; border-style:dashed; }
   </style>
 </head>
 <body>
@@ -57,7 +70,7 @@
   </header>
 
   <main>
-    <!-- ============== OVERVIEW ============== -->
+    <!-- ============== OVERVIEW (no transaction list here) ============== -->
     <section id="tab-overview" class="tabpanel active">
       <div class="stats">
         <div class="stat">
@@ -129,18 +142,19 @@
     <!-- ============== ADD / EDIT FORM ============== -->
     <section class="card">
       <h2 style="margin:0 0 10px;">Add / Edit Transaction <span id="formTypeBadge" class="badge"></span></h2>
+
+      <div class="row">
+        <label>Category</label>
+        <div class="chipbar">
+          <div id="catChips" class="chipbar"></div>
+          <button id="addCatBtn" type="button" class="chip add" title="Add category">+ New</button>
+        </div>
+      </div>
+
       <form id="txForm" autocomplete="off">
         <div class="row">
           <label for="txDate">Date</label>
           <input type="date" id="txDate" required />
-        </div>
-
-        <div class="row">
-          <label for="txCategory">Category</label>
-          <!-- Will be populated with categories of the current tab type -->
-          <select id="txCategory" required>
-            <option value="" disabled selected>Select category</option>
-          </select>
         </div>
 
         <div class="row">
@@ -161,7 +175,7 @@
     </section>
   </main>
 
-  <!-- Tabs wiring + a helper used by app.js -->
+  <!-- Tabs & activation hook -->
   <script>
     (function(){
       const tabs = Array.from(document.querySelectorAll('nav.tabs .tab'));
@@ -174,19 +188,10 @@
       function activate(name){
         tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === name));
         Object.entries(panels).forEach(([key,el]) => el.classList.toggle('active', key === name));
-        // inform app.js of tab change so it can set type + categories
         if (window.onTabActivated) window.onTabActivated(name);
       }
 
       tabs.forEach(btn => btn.addEventListener('click', () => activate(btn.dataset.tab)));
-
-      // Helper used by app.js when you click "Edit" on a row:
-      window.showFormTabForType = function(type){
-        activate(/income/i.test(type) ? 'income' : 'expenses');
-        setTimeout(() => { document.getElementById('txCategory')?.focus(); }, 0);
-      };
-
-      // Initial badge/categories set
       if (window.onTabActivated) window.onTabActivated('overview');
     })();
   </script>
