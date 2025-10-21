@@ -1,5 +1,5 @@
 // ========================================================
-// Family Budget - app.js (stable click handlers + delegation)
+// Family Budget - app.js (v5)  — includes Export / Import
 // ========================================================
 
 var $ = function(sel){ return document.querySelector(sel); };
@@ -96,7 +96,7 @@ function renderCategoryChips(kind){
     container.appendChild(b);
   });
 
-  // Always append + New as a chip inside the same bar
+  // '+ New' chip inside the same bar
   var add = document.createElement('button');
   add.type='button';
   add.className = 'chip new';
@@ -128,11 +128,11 @@ function addCategory(kind){
   selectCategory(kind, name);
 }
 
-/* Event delegation (handles chips + legacy buttons) */
+/* Event delegation (chips + optional external buttons) */
 document.addEventListener('click', function(e){
   var t = e.target;
 
-  // Clicks on chip actions
+  // chip actions
   if (t && t.getAttribute){
     var action = t.getAttribute('data-action');
     var kind   = t.getAttribute('data-kind');
@@ -144,7 +144,7 @@ document.addEventListener('click', function(e){
     }
   }
 
-  // Legacy external buttons (if present in HTML)
+  // legacy buttons (if you kept them)
   if (t && t.closest){
     if (t.closest('#addIncomeCat'))  { e.preventDefault(); addCategory('Income'); return; }
     if (t.closest('#addExpenseCat')) { e.preventDefault(); addCategory('Expense'); return; }
@@ -301,6 +301,78 @@ if (expenseForm) expenseForm.addEventListener('submit', function(e){
   clearForm('Expense'); renderAll();
 });
 var expenseClear = $('#expenseClear'); if (expenseClear) expenseClear.addEventListener('click', function(){ clearForm('Expense'); });
+
+/* ---------- EXPORT / IMPORT ---------- */
+function exportBackup(){
+  try{
+    var payload = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      data: state
+    };
+    var blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+    var ymd = new Date().toISOString().slice(0,10);
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'family-budget-backup-' + ymd + '.json';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); document.body.removeChild(a); }, 0);
+  }catch(err){
+    alert('Export failed: ' + (err && err.message ? err.message : String(err)));
+  }
+}
+
+function validateImported(obj){
+  // very light validation
+  if (!obj || typeof obj !== 'object') return 'Invalid JSON';
+  var data = obj.data || obj; // allow raw state or wrapped payload
+  if (!data.categories || typeof data.categories!=='object') return 'Missing categories';
+  if (!Array.isArray(data.categories.Income) || !Array.isArray(data.categories.Expense)) return 'Bad categories';
+  if (!Array.isArray(data.transactions)) return 'Missing transactions';
+  // sanitize transactions
+  data.transactions = data.transactions.map(function(t){
+    return {
+      id: (t.id || (Date.now().toString(36)+Math.random().toString(36).slice(2))),
+      type: (t.type==='Income' ? 'Income' : 'Expense'),
+      date: (t.date || new Date().toISOString().slice(0,10)),
+      category: (t.category || ''),
+      amountCents: (typeof t.amountCents==='number' ? t.amountCents : parseMoneyToCents(t.amount)),
+      note: (t.note || '')
+    };
+  });
+  if (!data.selectedMonth) data.selectedMonth = toYM(today());
+  return data;
+}
+
+function importBackupFile(file){
+  var reader = new FileReader();
+  reader.onload = function(){
+    try{
+      var obj = JSON.parse(reader.result);
+      var data = validateImported(obj);
+      if (typeof data === 'string') { alert('Import failed: ' + data); return; }
+      state = data;
+      saveState();
+      renderAll();
+      alert('Import successful.');
+    }catch(err){
+      alert('Import failed: ' + (err && err.message ? err.message : String(err)));
+    }
+  };
+  reader.onerror = function(){ alert('Could not read file.'); };
+  reader.readAsText(file);
+}
+
+/* Wire Export/Import buttons (and hidden file input) */
+var btnExport = $('#btnExport');
+if (btnExport) btnExport.addEventListener('click', exportBackup);
+
+var fileImport = $('#fileImport');
+if (fileImport) fileImport.addEventListener('change', function(){
+  if (fileImport.files && fileImport.files[0]) importBackupFile(fileImport.files[0]);
+  fileImport.value = ''; // reset so same file can be re-chosen
+});
 
 /* Render all */
 function renderAll(){
