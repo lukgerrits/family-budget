@@ -38,7 +38,20 @@
       <h2>Monthly Graph</h2>
       <canvas id="monthChart" height="140"></canvas>
 
-      <h2>Transactions</h2>
+     <h3>Transactions</h3>
+<table id="txTable" class="table">
+  <thead>
+    <tr>
+      <th style="width:110px">Date</th>
+      <th style="width:90px">Type</th>
+      <th>Category</th>
+      <th style="width:120px" class="right">Amount</th>
+      <th>Note</th>
+      <th style="width:120px">Actions</th> <!-- NEW -->
+    </tr>
+  </thead>
+  <tbody id="txTbody"><!-- filled by JS --></tbody>
+</table>
       <ul id="txList" class="txlist"></ul>
     </section>
 
