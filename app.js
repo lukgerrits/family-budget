@@ -402,7 +402,54 @@ if (fileImport) fileImport.addEventListener('change', function(){
   if (fileImport.files && fileImport.files[0]) importBackupFile(fileImport.files[0]);
   fileImport.value = ''; // reset so same file can be re-chosen
 });
+/* ---------- IMPORT CSV (optional) ---------- */
+function importCSVFile(file) {
+  const reader = new FileReader();
+  reader.onload = function () {
+    try {
+      const text = reader.result;
+      const rows = text.split(/\r?\n/).filter(r => r.trim() !== '');
+      const headers = rows[0].split(',').map(h => h.trim().toLowerCase());
+      const txs = [];
 
+      // expected headers: date,type,category,amount,note
+      for (let i = 1; i < rows.length; i++) {
+        const cols = rows[i].split(',');
+        if (cols.length < 4) continue;
+
+        const date = cols[headers.indexOf('date')]?.trim() || new Date().toISOString().slice(0, 10);
+        const type = (/income/i).test(cols[headers.indexOf('type')]) ? 'Income' : 'Expense';
+        const category = cols[headers.indexOf('category')]?.trim() || '';
+        const amountCents = parseMoneyToCents(cols[headers.indexOf('amount')] || '0');
+        const note = cols[headers.indexOf('note')]?.trim() || '';
+
+        txs.push({
+          id: Date.now().toString(36) + Math.random().toString(36).slice(2),
+          type, date, category, amountCents, note
+        });
+      }
+
+      state.transactions = state.transactions.concat(txs);
+      saveState();
+      renderAll();
+      alert('CSV import successful: ' + txs.length + ' rows added.');
+    } catch (err) {
+      alert('CSV import failed: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+/* Attach to same file input */
+if (fileImport) {
+  fileImport.addEventListener('change', function () {
+    const f = fileImport.files[0];
+    if (!f) return;
+    if (f.name.endsWith('.csv')) importCSVFile(f);
+    else importBackupFile(f); // keep JSON fallback
+    fileImport.value = '';
+  });
+}
 /* Render all */
 function renderAll(){
   if (monthPicker) monthPicker.value = state.selectedMonth;
