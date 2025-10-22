@@ -4,25 +4,17 @@
  * - Network-first for HTML, cache-first for static
  */
 
-const VERSION = 'v1.0.0';
+const VERSION = 'v1.0.1';
 const CACHE_NAME = `family-budget-${VERSION}`;
 
-// Helper to prefix asset paths with the SW scope (so it works under /username/repo/)
-const basePath = new URL(self.registration.scope).pathname.replace(/\/+$/, '') || '';
-const p = (path) => {
-  const clean = path.startsWith('/') ? path.slice(1) : path;
-  return `${basePath}/${clean}`;
-};
-
-// Core assets to pre-cache
 const CORE_ASSETS = [
-  p(''),                 // index.html (nav fallback)
+  p(''),
   p('index.html'),
-  p('styles.css'),       // delete if you don't have this
-  p('app.js'),           // delete if you don't have this
+  p('styles.css'),
+  p('app.js'),
   p('manifest.json'),
-  p('familybudget-icon-192x192-v2.png'),
-  p('familybudget-icon-512x512-v2.png'),
+  p('familybudget-icon-192x192-v3.png'),
+  p('familybudget-icon-512x512-v3.png')
 ];
 // INSTALL: pre-cache core
 self.addEventListener('install', (event) => {
