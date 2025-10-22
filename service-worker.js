@@ -21,8 +21,8 @@ const CORE_ASSETS = [
   p('styles.css'),       // delete if you don't have this
   p('app.js'),           // delete if you don't have this
   p('manifest.json'),
-  p('icons/familybudget-icon-192x192-v2.png'),
-  p('icons/familybudget-icon-512x512-v2.png'),
+  p('familybudget-icon-192x192-v2.png'),
+  p('familybudget-icon-512x512-v2.png'),
 ];
 // INSTALL: pre-cache core
 self.addEventListener('install', (event) => {
