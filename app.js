@@ -28,7 +28,7 @@ var STORAGE_KEY = 'family-budget/v4';
 function defaultState() {
   return {
     selectedMonth: toYM(today()),
-    categories: { Income: ['Salary'], Expense: ['Groceries', 'Rent', 'Utilities'] },
+    categories: { Income: ['Cash','Huur','Kinderbijslag', 'Andere',], Expense: ['Boodschappen', 'Aflossing Lening', 'Water', 'School', 'Kledij', 'Dokter/apothek', 'School', 'Hobby', 'Resto/Take-Away', 'Vakantie', 'Andere',] },
     transactions: [] // {id,type,date,category,amountCents,note}
   };
 }
