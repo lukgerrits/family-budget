@@ -232,12 +232,17 @@ function renderOverview(){
     tension: 0.25
   }
 ]},
-    options:{
-      responsive:true,
-      plugins:{ legend:{ position:'top' } },
-      scales:{ y:{ ticks:{ callback:function(v){ return moneyFmt.format(v); } } } }
-    }
-  });
+    options: {
+  responsive: true,
+  plugins: {
+    legend: { position: 'top', labels: { color: '#333' } }
+  },
+  scales: {
+    x: { grid: { color: '#EAEAEA' }, ticks: { color: '#555' } },
+    y: { grid: { color: '#EAEAEA' }, ticks: { color: '#555',
+      callback: function(v){ return moneyFmt.format(v); } } }
+  }
+});
 }
 
 /* Tables */
