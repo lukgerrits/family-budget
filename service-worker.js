@@ -16,15 +16,14 @@ const p = (path) => {
 
 // Core assets to pre-cache
 const CORE_ASSETS = [
-  p(''),                // maps to index.html via navigation fallback
+  p(''),                 // index.html (nav fallback)
   p('index.html'),
-  p('styles.css'),
-  p('app.js'),
+  p('styles.css'),       // delete if you don't have this
+  p('app.js'),           // delete if you don't have this
   p('manifest.json'),
-  p('icons/icon-192.png'),
-  p('icons/icon-512.png')
+  p('icons/familybudget-icon-192x192-v2.png'),
+  p('icons/familybudget-icon-512x512-v2.png'),
 ];
-
 // INSTALL: pre-cache core
 self.addEventListener('install', (event) => {
   event.waitUntil(
