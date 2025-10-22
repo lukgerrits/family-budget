@@ -403,34 +403,38 @@ function importBackupFile(file) {
   reader.readAsText(file);
 }
 
-/* ---------- IMPORT CSV (optional) ---------- */
-/* Supports comma or semicolon separated CSV.
-   Expected headers: date,type,category,amount,note */
+/* ---------- IMPORT CSV (with EU date support) ---------- */
 function importCSVFile(file) {
   const reader = new FileReader();
   reader.onload = function () {
     try {
       const text = reader.result;
-      const lines = text.split(/\r?\n/).filter(r => r.trim() !== '');
-      if (!lines.length) throw new Error('Empty CSV');
-
-      // detect delimiter
-      const first = lines[0];
-      const delim = (first.indexOf(';') > -1 && first.indexOf(',') === -1) ? ';' : ',';
-
-      const headers = first.split(delim).map(h => h.trim().toLowerCase());
-      const gi = (name) => headers.indexOf(name);
-
+      const rows = text.split(/\r?\n/).filter(r => r.trim() !== '');
+      const headers = rows[0].split(/,|;|\t/).map(h => h.trim().toLowerCase()); // accepts comma, semicolon, or tab
       const txs = [];
-      for (let i = 1; i < lines.length; i++) {
-        const cols = lines[i].split(delim);
+
+      // expected headers: date,type,category,amount,note
+      for (let i = 1; i < rows.length; i++) {
+        const cols = rows[i].split(/,|;|\t/);
         if (cols.length < 4) continue;
 
-        const date = (cols[gi('date')] || '').trim() || new Date().toISOString().slice(0, 10);
-        const type = (/income/i).test(cols[gi('type')] || '') ? 'Income' : 'Expense';
-        const category = (cols[gi('category')] || '').trim();
-        const amountCents = parseMoneyToCents(cols[gi('amount')] || '0');
-        const note = (cols[gi('note')] || '').trim();
+        // --- Date parsing (handles DD/MM/YYYY and YYYY-MM-DD) ---
+        let rawDate = (cols[headers.indexOf('date')] || '').trim();
+        let date = '';
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(rawDate)) {
+          // Convert EU format -> ISO
+          const [d, m, y] = rawDate.split('/');
+          date = `${y}-${m}-${d}`;
+        } else if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+          date = rawDate;
+        } else {
+          date = new Date().toISOString().slice(0, 10);
+        }
+
+        const type = (/income/i).test(cols[headers.indexOf('type')]) ? 'Income' : 'Expense';
+        const category = cols[headers.indexOf('category')]?.trim() || '';
+        const amountCents = parseMoneyToCents(cols[headers.indexOf('amount')] || '0');
+        const note = cols[headers.indexOf('note')]?.trim() || '';
 
         txs.push({
           id: Date.now().toString(36) + Math.random().toString(36).slice(2),
@@ -438,8 +442,7 @@ function importCSVFile(file) {
         });
       }
 
-      if (!txs.length) { alert('CSV parsed but no rows found.'); return; }
-
+      // merge and re-render
       state.transactions = state.transactions.concat(txs);
       saveState();
       renderAll();
@@ -448,10 +451,8 @@ function importCSVFile(file) {
       alert('CSV import failed: ' + err.message);
     }
   };
-  reader.onerror = function(){ alert('Could not read file.'); };
   reader.readAsText(file);
 }
-
 /* Wire Export/Import buttons (and hidden file input) */
 var btnExport = $('#btnExport');
 if (btnExport) btnExport.addEventListener('click', exportBackup);
