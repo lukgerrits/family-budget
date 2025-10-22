@@ -203,11 +203,35 @@ function renderOverview(){
   chart = new Chart(ctx, {
     type:'line',
     data:{ labels:labels,
-      datasets:[
-        { label:'Income', data:incomePer, borderColor:'#22c55e', backgroundColor:'rgba(34,197,94,.2)', tension:.2 },
-        { label:'Expenses', data:expensePer, borderColor:'#ef4444', backgroundColor:'rgba(239,68,68,.2)', tension:.2 },
-        { label:'Running Balance', data:runBal, borderColor:'#2563eb', backgroundColor:'rgba(37,99,235,.2)', tension:.2 }
-      ]},
+      ddatasets: [
+  {
+    label: 'Income',
+    data: incomePer,
+    borderColor: '#22C55E',           // green
+    backgroundColor: 'rgba(34,197,94,0.15)',
+    pointBackgroundColor: '#22C55E',
+    borderWidth: 2,
+    tension: 0.25
+  },
+  {
+    label: 'Expenses',
+    data: expensePer,
+    borderColor: '#EF4444',           // red
+    backgroundColor: 'rgba(239,68,68,0.15)',
+    pointBackgroundColor: '#EF4444',
+    borderWidth: 2,
+    tension: 0.25
+  },
+  {
+    label: 'Running Balance',
+    data: runBal,
+    borderColor: '#F1952E',           // warm orange to match icon
+    backgroundColor: 'rgba(241,149,46,0.18)',
+    pointBackgroundColor: '#F1952E',
+    borderWidth: 2,
+    tension: 0.25
+  }
+]},
     options:{
       responsive:true,
       plugins:{ legend:{ position:'top' } },
