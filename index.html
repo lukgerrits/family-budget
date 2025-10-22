@@ -1,199 +1,173 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+
   <title>Family Budget</title>
 
-  <link rel="stylesheet" href="styles.css"/>
-<link rel="manifest" href="./manifest.json?v=8">
-<meta name="theme-color" content="#F1952E">
-<link rel="icon" href="favicon.ico">
-<link rel="apple-touch-icon" href="familybudget-icon-512x512-v3.png">
-<meta name="theme-color" content="#F1952E">
-  
-  <!-- Chart.js for overview graph -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- PWA -->
+  <link rel="manifest" href="./manifest.json?v=7">
+  <meta name="theme-color" content="#F1952E" />
+  <link rel="icon" href="favicon.ico" />
+  <link rel="apple-touch-icon" href="familybudget-icon-512x512-v3.png" />
+
+  <!-- Minimal styles (optional but helpful) -->
+  <style>
+    :root { --bg:#fff; --text:#1f2937; --muted:#6b7280; --soft:#e5e7eb; --brand:#F1952E; --brand2:#F6A034; }
+    *{ box-sizing: border-box; }
+    body { margin:0; font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; color:var(--text); background:var(--bg); }
+    header { display:flex; align-items:center; justify-content:space-between; padding:16px; border-bottom:1px solid var(--soft); gap:12px; flex-wrap:wrap; }
+    h1 { font-size:20px; margin:0; }
+    .controls { display:flex; gap:8px; align-items:center; }
+    .tabs { display:flex; gap:8px; padding:12px 16px; border-bottom:1px solid var(--soft); flex-wrap:wrap; }
+    .tab { padding:8px 12px; border-radius:999px; border:1px solid var(--soft); background:#fff; color:#111; cursor:pointer; }
+    .tab.active { background:var(--brand); border-color:var(--brand); color:#fff; }
+    main { padding:16px; max-width:980px; margin:0 auto; }
+    section.panel { display:none; }
+    section.panel.active { display:block; }
+    .cards { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-bottom:16px; }
+    .card { border:1px solid var(--soft); border-radius:12px; padding:12px; background:#fff; }
+    .card h3 { margin:0 0 6px; font-size:14px; color:var(--muted); }
+    .sum { font-size:20px; font-weight:600; }
+    .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin:10px 0; }
+    .chip { padding:8px 12px; border-radius:999px; border:1px solid var(--soft); background:#fff; cursor:pointer; }
+    .chip.selected { background:#111; color:#fff; border-color:#111; }
+    .chip.new { border-style:dashed; color:#111; }
+    form .row input, form .row select, form .row button { padding:8px 10px; border-radius:10px; border:1px solid var(--soft); }
+    form .row button.primary { background:var(--brand); color:#fff; border-color:var(--brand); }
+    form .row button.ghost { background:#fff; color:#111; }
+    table { width:100%; border-collapse:collapse; margin-top:10px; border:1px solid var(--soft); border-radius:10px; overflow:hidden; }
+    thead th { text-align:left; font-weight:600; background:#fafafa; border-bottom:1px solid var(--soft); padding:8px; }
+    tbody td { border-bottom:1px solid var(--soft); padding:8px; }
+    td.right { text-align:right; }
+    .footer-actions { display:flex; gap:8px; margin-top:16px; }
+    button { cursor:pointer; }
+    @media (max-width:768px){ .cards { grid-template-columns:1fr; } }
+  </style>
+
+  <!-- Chart.js (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+
+  <!-- Your app code (cache-busted) -->
+  <script src="./app.js?v=9" defer></script>
 </head>
 <body>
-  <header class="site-header">
+  <header>
     <h1>Family Budget</h1>
-
-    <div class="monthbar">
-      <label for="monthPicker">Month</label>
-      <input type="month" id="monthPicker"/>
-      <button id="btnToday" type="button" class="ghost">Today</button>
+    <div class="controls">
+      <input id="monthPicker" type="month" />
+      <button id="btnToday" type="button">Today</button>
     </div>
-
-    <nav class="tabs">
-      <button class="tab active" data-tab="overview">Overview</button>
-      <button class="tab" data-tab="income">Income</button>
-      <button class="tab" data-tab="expenses">Expenses</button>
-    </nav>
-    
-    <div class="backupbar">
-  <button id="btnExport" type="button" class="ghost">Export backup</button>
-
-  <!-- Pretty “Import” button with hidden file input -->
-  <label for="fileImport" class="ghost filebtn">Import backup</label>
-  <input id="fileImport" type="file" accept="application/json" style="display:none" />
-</div>
   </header>
 
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" data-tab="overview">Overview</button>
+    <button class="tab" data-tab="income">Income</button>
+    <button class="tab" data-tab="expenses">Expenses</button>
+  </div>
+
   <main>
-    <!-- =============== OVERVIEW =============== -->
-    <section id="tab-overview" class="tabpanel active">
-      <div class="stats">
-        <div class="stat">
-          <div class="label">Income</div>
-          <div id="sumIncome" class="value green">€ 0,00</div>
+    <!-- OVERVIEW -->
+    <section id="tab-overview" class="panel active">
+      <div class="cards">
+        <div class="card">
+          <h3>Income</h3>
+          <div id="sumIncome" class="sum">€ 0,00</div>
         </div>
-        <div class="stat">
-          <div class="label">Expenses</div>
-          <div id="sumExpense" class="value red">€ 0,00</div>
+        <div class="card">
+          <h3>Expenses</h3>
+          <div id="sumExpense" class="sum">€ 0,00</div>
         </div>
-        <div class="stat">
-          <div class="label">Balance</div>
-          <div id="sumBalance" class="value">€ 0,00</div>
+        <div class="card">
+          <h3>Balance</h3>
+          <div id="sumBalance" class="sum">€ 0,00</div>
         </div>
       </div>
-
-      <h2>Monthly Graph</h2>
       <canvas id="monthChart" height="140"></canvas>
+      <div class="footer-actions">
+        <button id="btnExport" type="button">Export backup</button>
+        <button id="btnImport" type="button">Import backup</button>
+        <!-- Hidden file input (CSV + JSON) -->
+        <input id="fileImport"
+               type="file"
+               accept=".json,.csv,text/csv,application/vnd.ms-excel"
+               style="display:none" />
+      </div>
     </section>
 
-    <!-- =============== INCOME =============== -->
-    <section id="tab-income" class="tabpanel">
-      <h2>Income</h2>
-
-      <div class="cats-row">
-        <div id="incomeCats" class="chips"></div>
-        <button id="addIncomeCat" class="ghost" type="button">+ New category</button>
+    <!-- INCOME -->
+    <section id="tab-income" class="panel">
+      <div class="row">
+        <strong>Category:</strong> <span id="incomeSelectedCat">—</span>
       </div>
+      <div id="incomeCats" class="row"></div>
 
-      <section class="card">
-        <h3>Add / Edit Income</h3>
-        <form id="incomeForm" autocomplete="off">
-          <input type="hidden" id="incomeEditingId" value=""/>
+      <form id="incomeForm">
+        <input type="hidden" id="incomeEditingId" />
+        <div class="row">
+          <label>Date <input id="incomeDate" type="date" required></label>
+          <label>Amount (€) <input id="incomeAmount" type="text" placeholder="e.g. 1.234,56" required></label>
+          <label>Note <input id="incomeNote" type="text" placeholder="Optional note"></label>
+        </div>
+        <div class="row">
+          <button id="incomeSubmit" class="primary" type="submit">Add</button>
+          <button id="incomeClear" class="ghost" type="button">Clear</button>
+        </div>
+      </form>
 
-          <div class="row">
-            <label>Category</label>
-            <div id="incomeSelectedCat" class="cat-display">—</div>
-          </div>
-
-          <div class="row">
-            <label for="incomeDate">Date</label>
-            <input type="date" id="incomeDate" required/>
-          </div>
-
-          <div class="row">
-            <label for="incomeAmount">Amount</label>
-            <input type="text" id="incomeAmount" inputmode="decimal" placeholder="e.g. 1.234,56" required/>
-          </div>
-
-          <div class="row">
-            <label for="incomeNote">Note</label>
-            <input type="text" id="incomeNote" placeholder="Optional"/>
-          </div>
-
-          <div class="btnrow">
-            <button id="incomeSubmit" type="submit" class="primary">Add</button>
-            <button id="incomeClear" type="button" class="ghost">Clear</button>
-          </div>
-        </form>
-      </section>
-
-      <table class="list">
+      <table>
         <thead>
-          <tr>
-            <th style="width:120px;">Date</th>
-            <th>Category</th>
-            <th class="right" style="width:140px;">Amount</th>
-            <th>Note</th>
-            <th style="width:130px;">Actions</th>
-          </tr>
+          <tr><th>Date</th><th>Category</th><th>Amount</th><th>Note</th><th>Actions</th></tr>
         </thead>
         <tbody id="incomeTbody"></tbody>
         <tfoot>
-          <tr>
-            <td colspan="2" class="right"><strong>Total</strong></td>
-            <td class="right"><strong id="incomeTotal">€ 0,00</strong></td>
-            <td colspan="2"></td>
-          </tr>
+          <tr><td colspan="2"><strong>Total</strong></td><td id="incomeTotal" class="right">€ 0,00</td><td colspan="2"></td></tr>
         </tfoot>
       </table>
     </section>
 
-    <!-- =============== EXPENSES =============== -->
-    <section id="tab-expenses" class="tabpanel">
-      <h2>Expenses</h2>
-
-      <div class="cats-row">
-        <div id="expenseCats" class="chips"></div>
-        <button id="addExpenseCat" class="ghost" type="button">+ New category</button>
+    <!-- EXPENSES -->
+    <section id="tab-expenses" class="panel">
+      <div class="row">
+        <strong>Category:</strong> <span id="expenseSelectedCat">—</span>
       </div>
+      <div id="expenseCats" class="row"></div>
 
-      <section class="card">
-        <h3>Add / Edit Expense</h3>
-        <form id="expenseForm" autocomplete="off">
-          <input type="hidden" id="expenseEditingId" value=""/>
+      <form id="expenseForm">
+        <input type="hidden" id="expenseEditingId" />
+        <div class="row">
+          <label>Date <input id="expenseDate" type="date" required></label>
+          <label>Amount (€) <input id="expenseAmount" type="text" placeholder="e.g. 1.234,56" required></label>
+          <label>Note <input id="expenseNote" type="text" placeholder="Optional note"></label>
+        </div>
+        <div class="row">
+          <button id="expenseSubmit" class="primary" type="submit">Add</button>
+          <button id="expenseClear" class="ghost" type="button">Clear</button>
+        </div>
+      </form>
 
-          <div class="row">
-            <label>Category</label>
-            <div id="expenseSelectedCat" class="cat-display">—</div>
-          </div>
-
-          <div class="row">
-            <label for="expenseDate">Date</label>
-            <input type="date" id="expenseDate" required/>
-          </div>
-
-          <div class="row">
-            <label for="expenseAmount">Amount</label>
-            <input type="text" id="expenseAmount" inputmode="decimal" placeholder="e.g. 12,34" required/>
-          </div>
-
-          <div class="row">
-            <label for="expenseNote">Note</label>
-            <input type="text" id="expenseNote" placeholder="Optional"/>
-          </div>
-
-          <div class="btnrow">
-            <button id="expenseSubmit" type="submit" class="primary">Add</button>
-            <button id="expenseClear" type="button" class="ghost">Clear</button>
-          </div>
-        </form>
-      </section>
-
-      <table class="list">
+      <table>
         <thead>
-          <tr>
-            <th style="width:120px;">Date</th>
-            <th>Category</th>
-            <th class="right" style="width:140px;">Amount</th>
-            <th>Note</th>
-            <th style="width:130px;">Actions</th>
-          </tr>
+          <tr><th>Date</th><th>Category</th><th>Amount</th><th>Note</th><th>Actions</th></tr>
         </thead>
         <tbody id="expenseTbody"></tbody>
         <tfoot>
-          <tr>
-            <td colspan="2" class="right"><strong>Total</strong></td>
-            <td class="right"><strong id="expenseTotal">€ 0,00</strong></td>
-            <td colspan="2"></td>
-          </tr>
+          <tr><td colspan="2"><strong>Total</strong></td><td id="expenseTotal" class="right">€ 0,00</td><td colspan="2"></td></tr>
         </tfoot>
       </table>
     </section>
   </main>
 
-  <script src="app.js?v=8"></script>
-<script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', function () {
-      navigator.serviceWorker.register('service-worker.js').catch(console.error);
-    });
-  }
-</script>
+  <!-- Register the Service Worker (relative for GitHub Pages subpath) -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js', { scope: './' })
+          .catch(console.error);
+      });
+    }
+  </script>
 </body>
 </html>
