@@ -4,7 +4,7 @@
  * - Network-first for HTML, cache-first for static
  */
 
-const VERSION = 'v1.0.1';
+const VERSION = 'v1.0.2';
 const CACHE_NAME = `family-budget-${VERSION}`;
 
 const CORE_ASSETS = [
