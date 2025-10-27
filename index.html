@@ -12,7 +12,7 @@
   <link rel="icon" href="favicon.ico" />
   <link rel="apple-touch-icon" href="familybudget-icon-512x512-v3.png" />
 
-  <!-- Minimal styles (optional but helpful) -->
+  <!-- Minimal styles -->
   <style>
     :root { --bg:#fff; --text:#1f2937; --muted:#6b7280; --soft:#e5e7eb; --brand:#F1952E; --brand2:#F6A034; }
     *{ box-sizing: border-box; }
@@ -50,7 +50,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
 
   <!-- Your app code (cache-busted) -->
-  <script src="./app.js?v=9" defer></script>
+  <script src="./app.js?v=10" defer></script>
 </head>
 <body>
   <header>
@@ -89,11 +89,7 @@
       <div class="footer-actions">
         <button id="btnExport" type="button">Export backup</button>
         <button id="btnImport" type="button">Import backup</button>
-        <!-- Hidden file input (CSV + JSON) -->
-        <input id="fileImport"
-               type="file"
-               accept=".json,.csv,text/csv,application/vnd.ms-excel"
-               style="display:none" />
+        <input id="fileImport" type="file" accept=".json,.csv,text/csv,application/vnd.ms-excel" style="display:none" />
       </div>
     </section>
 
@@ -164,10 +160,7 @@
   <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').then(reg => {
-    // If a new SW is waiting to activate, make it take over now
     if (reg.waiting) reg.waiting.postMessage('SKIP_WAITING');
-
-    // If a new SW is found (update available)
     reg.addEventListener('updatefound', () => {
       const sw = reg.installing;
       if (!sw) return;
@@ -178,8 +171,6 @@ if ('serviceWorker' in navigator) {
       });
     });
   });
-
-  // When the new SW activates, reload to get fresh files
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     window.location.reload();
   });
