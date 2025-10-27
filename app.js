@@ -1,9 +1,10 @@
 // ========================================================
-// Family Budget - app.js (v9)
+// Family Budget - app.js (v10)
 // - Month filter can be cleared (shows ALL entries)
-// - Income/Expense tables respect cleared filter
-// - Cards use current month if set, otherwise ALL
-// - Overview chart: bars (Income/Expenses per day) + line (Running total, all time)
+// - Overview: bars (Income/Expenses per day) + line (Running total, all time)
+// - New tab: "Spend per month" with per-category envelopes
+//   * Envelope = donut: selected-month spend vs average monthly spend
+//   * If month is cleared, shows average only
 // ========================================================
 
 var $ = (sel) => document.querySelector(sel);
@@ -55,7 +56,7 @@ let state = loadState();
 
 /* Tabs */
 const tabs = Array.from(document.querySelectorAll('.tabs .tab'));
-const panels = { overview: $('#tab-overview'), income: $('#tab-income'), expenses: $('#tab-expenses') };
+const panels = { overview: $('#tab-overview'), income: $('#tab-income'), expenses: $('#tab-expenses'), envelopes: $('#tab-envelopes') };
 function activateTab(name) {
   tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === name));
   Object.keys(panels).forEach(k => panels[k].classList.toggle('active', k === name));
@@ -103,7 +104,7 @@ function renderCategoryChips(kind) {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'chip' + (current === name ? ' selected' : '');
-    b.textContent = name;
+    b.textContent = name + ' 🧧';
     b.setAttribute('data-action', 'select-cat');
     b.setAttribute('data-kind', kind);
     b.setAttribute('data-name', name);
@@ -152,7 +153,7 @@ document.addEventListener('click', (e) => {
   }
 });
 
-/* Transactions */
+/* Transactions + helpers */
 function txFiltered() {
   const ym = state.selectedMonth;
   if (!ym) return state.transactions.slice(); // ALL
@@ -172,16 +173,20 @@ function deleteTx(id) {
   state.transactions = state.transactions.filter(t => t.id !== id);
   saveState();
 }
+function getDistinctMonths() {
+  const set = new Set(state.transactions.map(t => (t.date || '').slice(0,7)).filter(Boolean));
+  return Array.from(set).sort();
+}
 
 /* Colors */
 const COLORS = {
-  income:  { line: '#5CC9A7', fill: 'rgba(92,201,167,0.35)' },  // bars fill a bit stronger
+  income:  { line: '#5CC9A7', fill: 'rgba(92,201,167,0.35)' },
   expense: { line: '#F07C7C', fill: 'rgba(240,124,124,0.35)' },
   balance: { line: '#F6A034', fill: 'rgba(246,160,52,0.18)' },
   axis: { text: '#555555', grid: '#EAEAEA', legend: '#333333' }
 };
 
-/* Helpers */
+/* Sorting */
 function sortByDateAsc(arr) {
   return [...arr].sort((a,b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
 }
@@ -213,7 +218,7 @@ function buildDailySeries(allTx) {
   return { labels, incomeVals, expenseVals, runningVals };
 }
 
-/* Overview */
+/* -------- Overview (Chart) -------- */
 let chart = null;
 function renderOverview() {
   // CARDS: month if selected, otherwise ALL
@@ -226,95 +231,190 @@ function renderOverview() {
   if (se) se.textContent = formatMoney(exp);
   if (sb) sb.textContent = formatMoney(bal);
 
- // CHART: bars (income/expense) + line (running total), one point per day across ALL time
-const allSorted = sortByDateAsc(state.transactions);
-const { labels, incomeVals, expenseVals, runningVals } = buildDailySeries(allSorted);
+  // CHART: bars (income/expense) + line (running total), one point per day across ALL time
+  const allSorted = sortByDateAsc(state.transactions);
+  const { labels, incomeVals, expenseVals, runningVals } = buildDailySeries(allSorted);
 
-const canvas = $('#monthChart'); if (!canvas) return;
-const ctx = canvas.getContext('2d');
-if (chart) chart.destroy();
+  const canvas = $('#monthChart'); if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (chart) chart.destroy();
 
-chart = new Chart(ctx, {
-  type: 'bar', // <- base type so bars render
-  data: {
-    labels: labels.length ? labels : ['No data'],
-    datasets: [
-      {
-        type: 'bar',
-        label: 'Income',
-        data: incomeVals.length ? incomeVals : [0],
-        backgroundColor: COLORS.income.fill,
-        borderColor: COLORS.income.line,
-        borderWidth: 1,
-        yAxisID: 'yBars',
-        order: 1
-      },
-      {
-        type: 'bar',
-        label: 'Expenses',
-        data: expenseVals.length ? expenseVals : [0], // negative to show below zero
-        backgroundColor: COLORS.expense.fill,
-        borderColor: COLORS.expense.line,
-        borderWidth: 1,
-        yAxisID: 'yBars',
-        order: 1
-      },
-      {
-        type: 'line',
-        label: 'Running Total (All Time)',
-        data: runningVals.length ? runningVals : [0],
-        borderColor: COLORS.balance.line,
-        backgroundColor: COLORS.balance.fill,
-        pointBackgroundColor: COLORS.balance.line,
-        borderWidth: 2,
-        tension: 0.25,
-        fill: false,          // keep bars visible
-        yAxisID: 'yTotal',
-        order: 2              // draw on top
-      }
-    ]
-  },
-  options: {
-    responsive: true,
-    plugins: {
-      legend: { position: 'top', labels: { color: COLORS.axis.legend } },
-      tooltip: {
-        callbacks: {
-          label: (ctx) => {
-            const v = ctx.parsed.y;
-            const name = ctx.dataset.label;
-            if (name === 'Income' || name === 'Expenses') {
-              return ` ${name}: ${moneyFmt.format(Math.abs(v))}`;
+  chart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels.length ? labels : ['No data'],
+      datasets: [
+        {
+          type: 'bar', label: 'Income', data: incomeVals.length ? incomeVals : [0],
+          backgroundColor: COLORS.income.fill, borderColor: COLORS.income.line, borderWidth: 1,
+          yAxisID: 'yBars', order: 1
+        },
+        {
+          type: 'bar', label: 'Expenses', data: expenseVals.length ? expenseVals : [0],
+          backgroundColor: COLORS.expense.fill, borderColor: COLORS.expense.line, borderWidth: 1,
+          yAxisID: 'yBars', order: 1
+        },
+        {
+          type: 'line', label: 'Running Total (All Time)', data: runningVals.length ? runningVals : [0],
+          borderColor: COLORS.balance.line, backgroundColor: COLORS.balance.fill, pointBackgroundColor: COLORS.balance.line,
+          borderWidth: 2, tension: 0.25, fill: false, yAxisID: 'yTotal', order: 2
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'top', labels: { color: COLORS.axis.legend } },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const v = ctx.parsed.y;
+              const name = ctx.dataset.label;
+              if (name === 'Income' || name === 'Expenses') return ` ${name}: ${moneyFmt.format(Math.abs(v))}`;
+              const prev = ctx.dataIndex > 0 ? ctx.dataset.data[ctx.dataIndex - 1] : 0;
+              const delta = v - prev;
+              return ` ${name}: ${moneyFmt.format(v)} (Δ ${moneyFmt.format(delta)})`;
             }
-            const prev = ctx.dataIndex > 0 ? ctx.dataset.data[ctx.dataIndex - 1] : 0;
-            const delta = v - prev;
-            return ` ${name}: ${moneyFmt.format(v)} (Δ ${moneyFmt.format(delta)})`;
+          }
+        }
+      },
+      scales: {
+        x: { grid: { color: COLORS.axis.grid }, ticks: { color: COLORS.axis.text } },
+        yBars: {
+          position: 'left', grid: { color: COLORS.axis.grid },
+          ticks: { color: COLORS.axis.text, callback: (v) => moneyFmt.format(v) },
+          title: { display: true, text: 'Daily amounts' }
+        },
+        yTotal: {
+          position: 'right', grid: { drawOnChartArea: false },
+          ticks: { color: COLORS.axis.text, callback: (v) => moneyFmt.format(v) },
+          title: { display: true, text: 'Running total' }
+        }
+      }
+    }
+  });
+}
+
+/* -------- Envelopes (Spend per month) -------- */
+let envelopeCharts = []; // keep for cleanup
+
+function sumExpensesByCategory(month /* or null for all */) {
+  const map = new Map(); // cat -> cents
+  const txs = month ? state.transactions.filter(t => t.type === 'Expense' && (t.date || '').slice(0,7) === month)
+                    : state.transactions.filter(t => t.type === 'Expense');
+  for (const t of txs) {
+    const k = t.category || '—';
+    map.set(k, (map.get(k) || 0) + t.amountCents);
+  }
+  return map;
+}
+function averageExpensesPerMonthByCategory() {
+  const months = getDistinctMonths();
+  const monthsCount = Math.max(months.length, 1);
+  const totalByCat = sumExpensesByCategory(null);
+  const avg = new Map(); // cat -> cents
+  for (const [k, cents] of totalByCat.entries()) {
+    avg.set(k, Math.round(cents / monthsCount));
+  }
+  return { avg, monthsCount };
+}
+
+function renderEnvelopes() {
+  const grid = $('#envelopeGrid'); if (!grid) return;
+
+  // Destroy old charts
+  envelopeCharts.forEach(ch => { try { ch.destroy(); } catch {} });
+  envelopeCharts = [];
+
+  // Data
+  const { avg } = averageExpensesPerMonthByCategory();
+  const month = state.selectedMonth || null;
+  const monthSumByCat = month ? sumExpensesByCategory(month) : new Map();
+
+  // Which categories to show? Use defined Expense categories plus any ad-hoc
+  const cats = Array.from(new Set([...(state.categories.Expense || []), ...avg.keys(), ...monthSumByCat.keys()]));
+
+  grid.innerHTML = '';
+  cats.forEach((cat) => {
+    const avgCents = avg.get(cat) || 0;
+    const monthCents = month ? (monthSumByCat.get(cat) || 0) : 0;
+
+    // Build card
+    const card = document.createElement('div');
+    card.className = 'envelope-card';
+
+    const icon = document.createElement('div');
+    icon.className = 'envelope-icon';
+    icon.textContent = '🧧';
+
+    const meta = document.createElement('div');
+    meta.className = 'envelope-meta';
+    const title = document.createElement('div');
+    title.className = 'envelope-title';
+    title.textContent = cat || '—';
+
+    const sub = document.createElement('div');
+    sub.className = 'envelope-sub';
+    if (month) {
+      sub.innerHTML = `Avg: <strong>${formatMoney(avgCents)}</strong> • ${month} spent: <strong>${formatMoney(monthCents)}</strong>` +
+        (monthCents > avgCents ? `<span class="tag-over">over</span>` : '');
+    } else {
+      sub.innerHTML = `Average per month: <strong>${formatMoney(avgCents)}</strong>`;
+    }
+
+    meta.appendChild(title);
+    meta.appendChild(sub);
+
+    // Chart holder
+    const canvas = document.createElement('canvas');
+    canvas.width = 110; canvas.height = 110;
+
+    card.appendChild(icon);
+    card.appendChild(canvas);
+    card.appendChild(meta);
+    grid.appendChild(card);
+
+    // Donut data: show selected month vs average cap
+    let spent = month ? monthCents : avgCents; // when no month filter, show avg as full ring
+    let cap = Math.max(avgCents, 0);
+    // If avg is 0, show an empty ring unless there is spend
+    let rem = cap > 0 ? Math.max(cap - spent, 0) : 0;
+    // For overflow, we still show 100% ring; “over” badge handles the signal
+
+    const ctx = canvas.getContext('2d');
+    const donut = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Spent', 'Remaining'],
+        datasets: [{
+          data: cap > 0 ? [Math.min(spent, cap) / 100, rem / 100] : [0, 1],
+          backgroundColor: [COLORS.expense.line, 'rgba(0,0,0,0.06)'],
+          borderWidth: 0
+        }]
+      },
+      options: {
+        cutout: '70%',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const name = ctx.label;
+                const v = ctx.parsed;
+                if (name === 'Remaining' && cap === 0) return 'No average data yet';
+                return ` ${name}: ${moneyFmt.format(v)}`;
+              },
+              afterBody: () => month && spent > cap ? [`Over by ${moneyFmt.format((spent - cap)/100)}`] : []
+            }
           }
         }
       }
-    },
-    scales: {
-      x: { grid: { color: COLORS.axis.grid }, ticks: { color: COLORS.axis.text } },
-      // Left axis for bars (daily amounts)
-      yBars: {
-        position: 'left',
-        grid: { color: COLORS.axis.grid },
-        ticks: { color: COLORS.axis.text, callback: (v) => moneyFmt.format(v) },
-        title: { display: true, text: 'Daily amounts' }
-      },
-      // Right axis for running total (cumulative)
-      yTotal: {
-        position: 'right',
-        grid: { drawOnChartArea: false }, // don’t overlay two grids
-        ticks: { color: COLORS.axis.text, callback: (v) => moneyFmt.format(v) },
-        title: { display: true, text: 'Running total' }
-      }
-    }
-  }
-});
+    });
+    envelopeCharts.push(donut);
+  });
 }
 
-/* Tables (respect current/cleared filter) */
+/* -------- Tables (respect filter) -------- */
 function renderTable(kind) {
   const isIncome = (kind === 'Income');
   const body = isIncome ? $('#incomeTbody') : $('#expenseTbody');
@@ -346,7 +446,7 @@ function renderTable(kind) {
   tot.textContent = formatMoney(sum);
 }
 
-/* Forms */
+/* -------- Forms -------- */
 function clearForm(kind) {
   if (kind === 'Income') {
     $('#incomeEditingId').value = ''; $('#incomeDate').value = ''; $('#incomeAmount').value = ''; $('#incomeNote').value = '';
@@ -399,7 +499,7 @@ if (expenseForm) expenseForm.addEventListener('submit', (e) => {
 });
 const expenseClear = $('#expenseClear'); if (expenseClear) expenseClear.addEventListener('click', () => clearForm('Expense'));
 
-/* Export / Import */
+/* Export / Import (unchanged) */
 function exportBackup() {
   try {
     const payload = { version: 1, exportedAt: new Date().toISOString(), data: state };
@@ -493,6 +593,7 @@ function renderAll() {
   renderCategoryChips('Income'); renderCategoryChips('Expense');
   renderOverview();
   renderTable('Income'); renderTable('Expense');
+  renderEnvelopes();
 }
 initMonthPicker();
 activateTab('overview');
