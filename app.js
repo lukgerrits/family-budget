@@ -226,76 +226,92 @@ function renderOverview() {
   if (se) se.textContent = formatMoney(exp);
   if (sb) sb.textContent = formatMoney(bal);
 
-  // CHART: bars (income/expense) + line (running total), one point per day across ALL time
-  const allSorted = sortByDateAsc(state.transactions);
-  const { labels, incomeVals, expenseVals, runningVals } = buildDailySeries(allSorted);
+ // CHART: bars (income/expense) + line (running total), one point per day across ALL time
+const allSorted = sortByDateAsc(state.transactions);
+const { labels, incomeVals, expenseVals, runningVals } = buildDailySeries(allSorted);
 
-  const canvas = $('#monthChart'); if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  if (chart) chart.destroy();
+const canvas = $('#monthChart'); if (!canvas) return;
+const ctx = canvas.getContext('2d');
+if (chart) chart.destroy();
 
-  chart = new Chart(ctx, {
-    data: {
-      labels: labels.length ? labels : ['No data'],
-      datasets: [
-        {
-          type: 'bar',
-          label: 'Income',
-          data: incomeVals.length ? incomeVals : [0],
-          backgroundColor: COLORS.income.fill,
-          borderColor: COLORS.income.line,
-          borderWidth: 1
-        },
-        {
-          type: 'bar',
-          label: 'Expenses',
-          data: expenseVals.length ? expenseVals : [0],
-          backgroundColor: COLORS.expense.fill,
-          borderColor: COLORS.expense.line,
-          borderWidth: 1
-        },
-        {
-          type: 'line',
-          label: 'Running Total (All Time)',
-          data: runningVals.length ? runningVals : [0],
-          borderColor: COLORS.balance.line,
-          backgroundColor: COLORS.balance.fill,
-          pointBackgroundColor: COLORS.balance.line,
-          borderWidth: 2,
-          tension: 0.25,
-          fill: true,
-          yAxisID: 'y'
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { position: 'top', labels: { color: COLORS.axis.legend } },
-        tooltip: {
-          callbacks: {
-            label: (ctx) => {
-              const v = ctx.parsed.y;
-              const name = ctx.dataset.label;
-              if (name === 'Income' || name === 'Expenses') {
-                return ` ${name}: ${moneyFmt.format(Math.abs(v))}`;
-              }
-              const prev = ctx.dataIndex > 0 ? ctx.dataset.data[ctx.dataIndex - 1] : 0;
-              const delta = v - prev;
-              return ` ${name}: ${moneyFmt.format(v)} (Δ ${moneyFmt.format(delta)})`;
+chart = new Chart(ctx, {
+  type: 'bar', // <- base type so bars render
+  data: {
+    labels: labels.length ? labels : ['No data'],
+    datasets: [
+      {
+        type: 'bar',
+        label: 'Income',
+        data: incomeVals.length ? incomeVals : [0],
+        backgroundColor: COLORS.income.fill,
+        borderColor: COLORS.income.line,
+        borderWidth: 1,
+        yAxisID: 'yBars',
+        order: 1
+      },
+      {
+        type: 'bar',
+        label: 'Expenses',
+        data: expenseVals.length ? expenseVals : [0], // negative to show below zero
+        backgroundColor: COLORS.expense.fill,
+        borderColor: COLORS.expense.line,
+        borderWidth: 1,
+        yAxisID: 'yBars',
+        order: 1
+      },
+      {
+        type: 'line',
+        label: 'Running Total (All Time)',
+        data: runningVals.length ? runningVals : [0],
+        borderColor: COLORS.balance.line,
+        backgroundColor: COLORS.balance.fill,
+        pointBackgroundColor: COLORS.balance.line,
+        borderWidth: 2,
+        tension: 0.25,
+        fill: false,          // keep bars visible
+        yAxisID: 'yTotal',
+        order: 2              // draw on top
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { position: 'top', labels: { color: COLORS.axis.legend } },
+      tooltip: {
+        callbacks: {
+          label: (ctx) => {
+            const v = ctx.parsed.y;
+            const name = ctx.dataset.label;
+            if (name === 'Income' || name === 'Expenses') {
+              return ` ${name}: ${moneyFmt.format(Math.abs(v))}`;
             }
+            const prev = ctx.dataIndex > 0 ? ctx.dataset.data[ctx.dataIndex - 1] : 0;
+            const delta = v - prev;
+            return ` ${name}: ${moneyFmt.format(v)} (Δ ${moneyFmt.format(delta)})`;
           }
         }
+      }
+    },
+    scales: {
+      x: { grid: { color: COLORS.axis.grid }, ticks: { color: COLORS.axis.text } },
+      // Left axis for bars (daily amounts)
+      yBars: {
+        position: 'left',
+        grid: { color: COLORS.axis.grid },
+        ticks: { color: COLORS.axis.text, callback: (v) => moneyFmt.format(v) },
+        title: { display: true, text: 'Daily amounts' }
       },
-      scales: {
-        x: { grid: { color: COLORS.axis.grid }, ticks: { color: COLORS.axis.text } },
-        y: {
-          grid: { color: COLORS.axis.grid },
-          ticks: { color: COLORS.axis.text, callback: (v) => moneyFmt.format(v) }
-        }
+      // Right axis for running total (cumulative)
+      yTotal: {
+        position: 'right',
+        grid: { drawOnChartArea: false }, // don’t overlay two grids
+        ticks: { color: COLORS.axis.text, callback: (v) => moneyFmt.format(v) },
+        title: { display: true, text: 'Running total' }
       }
     }
-  });
+  }
+});
 }
 
 /* Tables (respect current/cleared filter) */
