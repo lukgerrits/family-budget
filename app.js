@@ -13,8 +13,8 @@ function parseMoneyToCents(str) {
   if (!str) return 0;
   var s = String(str).trim();
   s = s.replace(/\s/g, '');
-  if (s.indexOf(',') !== -1) s = s.replace(/\./g, '');    // remove thousand dots if comma used
-  s = s.replace(',', '.').replace(/[^\d.-]/g, '');        // standardize decimal
+  if (s.indexOf(',') !== -1) s = s.replace(/\./g, '');
+  s = s.replace(',', '.').replace(/[^\d.-]/g, '');
   var v = parseFloat(s);
   return isNaN(v) ? 0 : Math.round(v * 100);
 }
@@ -96,7 +96,6 @@ function renderCategoryChips(kind) {
     container.appendChild(b);
   });
 
-  // '+ New' chip inside the same bar
   var add = document.createElement('button');
   add.type = 'button';
   add.className = 'chip new';
@@ -128,11 +127,9 @@ function addCategory(kind) {
   selectCategory(kind, name);
 }
 
-/* Event delegation (chips + optional external buttons) */
+/* Event delegation */
 document.addEventListener('click', function (e) {
   var t = e.target;
-
-  // chip actions
   if (t && t.getAttribute) {
     var action = t.getAttribute('data-action');
     var kind = t.getAttribute('data-kind');
@@ -144,7 +141,6 @@ document.addEventListener('click', function (e) {
     }
   }
 
-  // legacy buttons (if you kept them)
   if (t && t.closest) {
     if (t.closest('#addIncomeCat')) { e.preventDefault(); addCategory('Income'); return; }
     if (t.closest('#addExpenseCat')) { e.preventDefault(); addCategory('Expense'); return; }
@@ -171,15 +167,14 @@ function deleteTx(id) {
   saveState();
 }
 
-/* ---------- COLORS (modern palette) ---------- */
+/* Colors */
 const COLORS = {
-  income: { line: '#5CC9A7', fill: 'rgba(92,201,167,0.15)' },     // mint green
-  expense: { line: '#F07C7C', fill: 'rgba(240,124,124,0.15)' },   // coral red
-  balance: { line: '#F6A034', fill: 'rgba(246,160,52,0.18)' },    // warm orange (icon match)
+  income: { line: '#5CC9A7', fill: 'rgba(92,201,167,0.15)' },
+  expense: { line: '#F07C7C', fill: 'rgba(240,124,124,0.15)' },
+  balance: { line: '#F6A034', fill: 'rgba(246,160,52,0.18)' },
   axis: { text: '#555555', grid: '#EAEAEA', legend: '#333333' }
 };
 
-/* ---------- Helpers for ALL-TIME running total ---------- */
 function sortByDateAsc(arr) {
   return [...arr].sort(function (a, b) {
     if (a.date < b.date) return -1;
@@ -191,7 +186,7 @@ function sortByDateAsc(arr) {
 /* Overview */
 var chart = null;
 function renderOverview() {
-  // A) CARDS = month-filtered totals (unchanged behavior)
+  // Cards = month totals
   var transMonth = txOfMonth();
   var inc = 0, exp = 0;
   transMonth.forEach(function (t) { if (t.type === 'Income') inc += t.amountCents; else exp += t.amountCents; });
@@ -202,19 +197,17 @@ function renderOverview() {
   if (se) se.textContent = formatMoney(exp);
   if (sb) sb.textContent = formatMoney(bal);
 
-  // B) CHART = ALL-TIME running total (ignores month filter)
+  // Chart = ALL-TIME running total
   var all = sortByDateAsc(state.transactions);
-
-  // Build cumulative series by transaction order
-  var labels = [];   // e.g., "2025-10-02"
-  var running = [];  // euros (not cents) for Chart.js axis tick formatting
+  var labels = [];
+  var running = [];
   var acc = 0;
 
   for (var i = 0; i < all.length; i++) {
     var t = all[i];
     acc += (t.type === 'Income' ? +t.amountCents : -t.amountCents);
-    labels.push(t.date);              // simple ISO date label
-    running.push(acc / 100);          // euros
+    labels.push(t.date);
+    running.push(acc / 100);
   }
 
   var canvas = $('#monthChart'); if (!canvas) return;
@@ -350,7 +343,7 @@ if (expenseForm) expenseForm.addEventListener('submit', function (e) {
 });
 var expenseClear = $('#expenseClear'); if (expenseClear) expenseClear.addEventListener('click', function () { clearForm('Expense'); });
 
-/* ---------- EXPORT / IMPORT (JSON) ---------- */
+/* Export / Import */
 function exportBackup() {
   try {
     var payload = { version: 1, exportedAt: new Date().toISOString(), data: state };
@@ -368,13 +361,11 @@ function exportBackup() {
 }
 
 function validateImported(obj) {
-  // very light validation
   if (!obj || typeof obj !== 'object') return 'Invalid JSON';
-  var data = obj.data || obj; // allow raw state or wrapped payload
+  var data = obj.data || obj;
   if (!data.categories || typeof data.categories !== 'object') return 'Missing categories';
   if (!Array.isArray(data.categories.Income) || !Array.isArray(data.categories.Expense)) return 'Bad categories';
   if (!Array.isArray(data.transactions)) return 'Missing transactions';
-  // sanitize transactions
   data.transactions = data.transactions.map(function (t) {
     return {
       id: (t.id || (Date.now().toString(36) + Math.random().toString(36).slice(2))),
@@ -408,26 +399,23 @@ function importBackupFile(file) {
   reader.readAsText(file);
 }
 
-/* ---------- IMPORT CSV (with EU date support) ---------- */
+/* Import CSV */
 function importCSVFile(file) {
   const reader = new FileReader();
   reader.onload = function () {
     try {
       const text = reader.result;
       const rows = text.split(/\r?\n/).filter(r => r.trim() !== '');
-      const headers = rows[0].split(/,|;|\t/).map(h => h.trim().toLowerCase()); // accepts comma, semicolon, or tab
+      const headers = rows[0].split(/,|;|\t/).map(h => h.trim().toLowerCase());
       const txs = [];
 
-      // expected headers: date,type,category,amount,note
       for (let i = 1; i < rows.length; i++) {
         const cols = rows[i].split(/,|;|\t/);
         if (cols.length < 4) continue;
 
-        // --- Date parsing (handles DD/MM/YYYY and YYYY-MM-DD) ---
         let rawDate = (cols[headers.indexOf('date')] || '').trim();
         let date = '';
         if (/^\d{2}\/\d{2}\/\d{4}$/.test(rawDate)) {
-          // Convert EU format -> ISO
           const [d, m, y] = rawDate.split('/');
           date = `${y}-${m}-${d}`;
         } else if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
@@ -447,7 +435,6 @@ function importCSVFile(file) {
         });
       }
 
-      // merge and re-render
       state.transactions = state.transactions.concat(txs);
       saveState();
       renderAll();
@@ -458,7 +445,7 @@ function importCSVFile(file) {
   };
   reader.readAsText(file);
 }
-/* Wire Export/Import buttons (and hidden file input) */
+
 var btnExport = $('#btnExport');
 if (btnExport) btnExport.addEventListener('click', exportBackup);
 
@@ -475,8 +462,8 @@ if (fileImport) {
     if (!f) return;
     const name = f.name.toLowerCase();
     if (name.endsWith('.csv')) importCSVFile(f);
-    else importBackupFile(f); // JSON fallback
-    fileImport.value = ''; // allow same file re-select
+    else importBackupFile(f);
+    fileImport.value = '';
   });
 }
 
@@ -484,7 +471,6 @@ if (fileImport) {
 function renderAll() {
   if (monthPicker) monthPicker.value = state.selectedMonth;
 
-  // default category if none selected
   if (!selectedIncomeCat && state.categories.Income && state.categories.Income.length) selectedIncomeCat = state.categories.Income[0];
   if (!selectedExpenseCat && state.categories.Expense && state.categories.Expense.length) selectedExpenseCat = state.categories.Expense[0];
   var incDisp = $('#incomeSelectedCat'); if (incDisp) incDisp.textContent = selectedIncomeCat || '—';
@@ -493,9 +479,9 @@ function renderAll() {
   renderCategoryChips('Income');
   renderCategoryChips('Expense');
 
-  renderOverview();       // now shows ALL-TIME running total
-  renderTable('Income');  // still month-filtered
-  renderTable('Expense'); // still month-filtered
+  renderOverview();
+  renderTable('Income');
+  renderTable('Expense');
 }
 
 /* Init */
