@@ -1,5 +1,5 @@
 // ========================================================
-// Family Budget - app.js (v6) — Export / Import (JSON + CSV)
+// Family Budget - app.js (v7) — Month filter + ALL-TIME running total chart
 // ========================================================
 
 var $ = function (sel) { return document.querySelector(sel); };
@@ -28,7 +28,7 @@ var STORAGE_KEY = 'family-budget/v4';
 function defaultState() {
   return {
     selectedMonth: toYM(today()),
-    categories: { Income: ['Cash','Huur','Kinderbijslag', 'Andere',], Expense: ['Boodschappen', 'Aflossing Lening', 'Water', 'School', 'Kledij', 'Dokter/apothek', 'School', 'Hobby', 'Resto/Take-Away', 'Vakantie', 'Andere',] },
+    categories: { Income: ['Cash','Huur','Kinderbijslag', 'Andere'], Expense: ['Boodschappen', 'Aflossing Lening', 'Water', 'School', 'Kledij', 'Dokter/apothek', 'School', 'Hobby', 'Resto/Take-Away', 'Vakantie', 'Andere'] },
     transactions: [] // {id,type,date,category,amountCents,note}
   };
 }
@@ -179,12 +179,22 @@ const COLORS = {
   axis: { text: '#555555', grid: '#EAEAEA', legend: '#333333' }
 };
 
+/* ---------- Helpers for ALL-TIME running total ---------- */
+function sortByDateAsc(arr) {
+  return [...arr].sort(function (a, b) {
+    if (a.date < b.date) return -1;
+    if (a.date > b.date) return 1;
+    return 0;
+  });
+}
+
 /* Overview */
 var chart = null;
 function renderOverview() {
-  var trans = txOfMonth();
+  // A) CARDS = month-filtered totals (unchanged behavior)
+  var transMonth = txOfMonth();
   var inc = 0, exp = 0;
-  trans.forEach(function (t) { if (t.type === 'Income') inc += t.amountCents; else exp += t.amountCents; });
+  transMonth.forEach(function (t) { if (t.type === 'Income') inc += t.amountCents; else exp += t.amountCents; });
   var bal = inc - exp;
 
   var si = $('#sumIncome'), se = $('#sumExpense'), sb = $('#sumBalance');
@@ -192,18 +202,20 @@ function renderOverview() {
   if (se) se.textContent = formatMoney(exp);
   if (sb) sb.textContent = formatMoney(bal);
 
-  // Chart data
-  var mp = state.selectedMonth.split('-'); var year = +mp[0], month = (+mp[1] - 1);
-  var days = new Date(year, month + 1, 0).getDate();
-  var incomePer = Array(days).fill(0), expensePer = Array(days).fill(0), runBal = Array(days).fill(0);
-  trans.forEach(function (t) {
-    var d = new Date(t.date + 'T00:00:00');
-    var idx = d.getDate() - 1; if (idx < 0 || idx >= days) return;
-    if (t.type === 'Income') incomePer[idx] += t.amountCents / 100;
-    else expensePer[idx] += t.amountCents / 100;
-  });
-  var r = 0; for (var i = 0; i < days; i++) { r += (incomePer[i] - expensePer[i]); runBal[i] = r; }
-  var labels = Array.from({ length: days }, function (_, i) { return String(i + 1); });
+  // B) CHART = ALL-TIME running total (ignores month filter)
+  var all = sortByDateAsc(state.transactions);
+
+  // Build cumulative series by transaction order
+  var labels = [];   // e.g., "2025-10-02"
+  var running = [];  // euros (not cents) for Chart.js axis tick formatting
+  var acc = 0;
+
+  for (var i = 0; i < all.length; i++) {
+    var t = all[i];
+    acc += (t.type === 'Income' ? +t.amountCents : -t.amountCents);
+    labels.push(t.date);              // simple ISO date label
+    running.push(acc / 100);          // euros
+  }
 
   var canvas = $('#monthChart'); if (!canvas) return;
   var ctx = canvas.getContext('2d');
@@ -211,40 +223,33 @@ function renderOverview() {
   chart = new Chart(ctx, {
     type: 'line',
     data: {
-      labels: labels,
+      labels: labels.length ? labels : ['No data'],
       datasets: [
         {
-          label: 'Income',
-          data: incomePer,
-          borderColor: COLORS.income.line,
-          backgroundColor: COLORS.income.fill,
-          pointBackgroundColor: COLORS.income.line,
-          borderWidth: 2,
-          tension: 0.25
-        },
-        {
-          label: 'Expenses',
-          data: expensePer,
-          borderColor: COLORS.expense.line,
-          backgroundColor: COLORS.expense.fill,
-          pointBackgroundColor: COLORS.expense.line,
-          borderWidth: 2,
-          tension: 0.25
-        },
-        {
-          label: 'Running Balance',
-          data: runBal,
+          label: 'Running Total (All Time)',
+          data: running.length ? running : [0],
           borderColor: COLORS.balance.line,
           backgroundColor: COLORS.balance.fill,
           pointBackgroundColor: COLORS.balance.line,
           borderWidth: 2,
-          tension: 0.25
+          tension: 0.25,
+          fill: true
         }
       ]
     },
     options: {
       responsive: true,
-      plugins: { legend: { position: 'top', labels: { color: COLORS.axis.legend } } },
+      plugins: {
+        legend: { position: 'top', labels: { color: COLORS.axis.legend } },
+        tooltip: {
+          callbacks: {
+            label: function (ctx) {
+              var v = ctx.parsed.y;
+              return ' ' + moneyFmt.format(v);
+            }
+          }
+        }
+      },
       scales: {
         x: { grid: { color: COLORS.axis.grid }, ticks: { color: COLORS.axis.text } },
         y: {
@@ -488,9 +493,9 @@ function renderAll() {
   renderCategoryChips('Income');
   renderCategoryChips('Expense');
 
-  renderOverview();
-  renderTable('Income');
-  renderTable('Expense');
+  renderOverview();       // now shows ALL-TIME running total
+  renderTable('Income');  // still month-filtered
+  renderTable('Expense'); // still month-filtered
 }
 
 /* Init */
