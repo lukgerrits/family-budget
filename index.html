@@ -44,7 +44,9 @@
     @media (max-width:768px){ .cards { grid-template-columns:1fr; } }
   </style>
 
+  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+  <!-- App (cache-busted) -->
   <script src="./app.js?v=11" defer></script>
 </head>
 <body>
@@ -57,9 +59,102 @@
     </div>
   </header>
 
-  <!-- tabs + pages unchanged ... -->
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" data-tab="overview">Overview</button>
+    <button class="tab" data-tab="income">Income</button>
+    <button class="tab" data-tab="expenses">Expenses</button>
+  </div>
 
-  <!-- Register the Service Worker -->
+  <main>
+    <!-- OVERVIEW -->
+    <section id="tab-overview" class="panel active">
+      <div class="cards">
+        <div class="card">
+          <h3>Income</h3>
+          <div id="sumIncome" class="sum">€ 0,00</div>
+        </div>
+        <div class="card">
+          <h3>Expenses</h3>
+          <div id="sumExpense" class="sum">€ 0,00</div>
+        </div>
+        <div class="card">
+          <h3>Balance</h3>
+          <div id="sumBalance" class="sum">€ 0,00</div>
+        </div>
+      </div>
+      <canvas id="monthChart" height="140"></canvas>
+      <div class="footer-actions">
+        <button id="btnExport" type="button">Export backup</button>
+        <button id="btnImport" type="button">Import backup</button>
+        <input id="fileImport" type="file" accept=".json,.csv,text/csv,application/vnd.ms-excel" style="display:none" />
+      </div>
+    </section>
+
+    <!-- INCOME -->
+    <section id="tab-income" class="panel">
+      <div class="row">
+        <strong>Category:</strong> <span id="incomeSelectedCat">—</span>
+      </div>
+      <div id="incomeCats" class="row"></div>
+
+      <form id="incomeForm">
+        <input type="hidden" id="incomeEditingId" />
+        <div class="row">
+          <label>Date <input id="incomeDate" type="date" required></label>
+          <label>Amount (€) <input id="incomeAmount" type="text" placeholder="e.g. 1.234,56" required></label>
+          <label>Note <input id="incomeNote" type="text" placeholder="Optional note"></label>
+        </div>
+        <div class="row">
+          <button id="incomeSubmit" class="primary" type="submit">Add</button>
+          <button id="incomeClear" class="ghost" type="button">Clear</button>
+        </div>
+      </form>
+
+      <table>
+        <thead>
+          <tr><th>Date</th><th>Category</th><th>Amount</th><th>Note</th><th>Actions</th></tr>
+        </thead>
+        <tbody id="incomeTbody"></tbody>
+        <tfoot>
+          <tr><td colspan="2"><strong>Total</strong></td><td id="incomeTotal" class="right">€ 0,00</td><td colspan="2"></td></tr>
+        </tfoot>
+      </table>
+    </section>
+
+    <!-- EXPENSES -->
+    <section id="tab-expenses" class="panel">
+      <div class="row">
+        <strong>Category:</strong> <span id="expenseSelectedCat">—</span>
+      </div>
+      <div id="expenseCats" class="row"></div>
+
+      <form id="expenseForm">
+        <input type="hidden" id="expenseEditingId" />
+        <div class="row">
+          <label>Date <input id="expenseDate" type="date" required></label>
+          <label>Amount (€) <input id="expenseAmount" type="text" placeholder="e.g. 1.234,56" required></label>
+          <label>Note <input id="expenseNote" type="text" placeholder="Optional note"></label>
+        </div>
+        <div class="row">
+          <button id="expenseSubmit" class="primary" type="submit">Add</button>
+          <button id="expenseClear" class="ghost" type="button">Clear</button>
+        </div>
+      </form>
+
+      <table>
+        <thead>
+          <tr><th>Date</th><th>Category</th><th>Amount</th><th>Note</th><th>Actions</th></tr>
+        </thead>
+        <tbody id="expenseTbody"></tbody>
+        <tfoot>
+          <tr><td colspan="2"><strong>Total</strong></td><td id="expenseTotal" class="right">€ 0,00</td><td colspan="2"></td></tr>
+        </tfoot>
+      </table>
+    </section>
+  </main>
+
+  <!-- SW registration -->
   <script>
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./service-worker.js').then(reg => {
