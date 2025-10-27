@@ -5,7 +5,7 @@
  * - Stale-while-revalidate for static assets (CSS, images, manifest)
  */
 
-const VERSION = 'v1.0.8'; // ⬅️ bump this on every deploy
+const VERSION = 'v1.0.9'; // ⬅️ bump this on every deploy
 const PRECACHE = `family-budget-precache-${VERSION}`;
 const RUNTIME  = `family-budget-runtime-${VERSION}`;
 
