@@ -1,9 +1,9 @@
 // ========================================================
-// Family Budget - app.js (v8)
+// Family Budget - app.js (v9)
 // - Month filter can be cleared (shows ALL entries)
 // - Income/Expense tables respect cleared filter
 // - Cards use current month if set, otherwise ALL
-// - Chart: one point per day (daily sums), running total over ALL time
+// - Overview chart: bars (Income/Expenses per day) + line (Running total, all time)
 // ========================================================
 
 var $ = (sel) => document.querySelector(sel);
@@ -175,6 +175,8 @@ function deleteTx(id) {
 
 /* Colors */
 const COLORS = {
+  income:  { line: '#5CC9A7', fill: 'rgba(92,201,167,0.35)' },  // bars fill a bit stronger
+  expense: { line: '#F07C7C', fill: 'rgba(240,124,124,0.35)' },
   balance: { line: '#F6A034', fill: 'rgba(246,160,52,0.18)' },
   axis: { text: '#555555', grid: '#EAEAEA', legend: '#333333' }
 };
@@ -183,23 +185,32 @@ const COLORS = {
 function sortByDateAsc(arr) {
   return [...arr].sort((a,b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
 }
-// One point per day, running total over ALL time
-function buildDailyRunningSeries(allTx) {
-  const daily = new Map(); // date -> cents delta
+
+/* Build daily series: bars (income/expense per day) + line (running total) */
+function buildDailySeries(allTx) {
+  const incomeMap = new Map();  // date -> cents
+  const expenseMap = new Map(); // date -> cents
   for (const t of allTx) {
-    const delta = t.type === 'Income' ? +t.amountCents : -t.amountCents;
-    daily.set(t.date, (daily.get(t.date) || 0) + delta);
+    const key = t.date;
+    if (t.type === 'Income') incomeMap.set(key, (incomeMap.get(key) || 0) + t.amountCents);
+    else expenseMap.set(key, (expenseMap.get(key) || 0) + t.amountCents);
   }
-  const dates = Array.from(daily.keys()).sort(); // ISO sorts
+  const dates = Array.from(new Set([...incomeMap.keys(), ...expenseMap.keys()])).sort();
   const labels = [];
-  const values = [];
+  const incomeVals = [];
+  const expenseVals = []; // negative for bars
+  const runningVals = [];
   let acc = 0;
   for (const d of dates) {
-    acc += daily.get(d);
+    const inc = incomeMap.get(d) || 0;
+    const exp = expenseMap.get(d) || 0;
+    acc += inc - exp;
     labels.push(d);
-    values.push(acc / 100);
+    incomeVals.push(inc / 100);
+    expenseVals.push(-(exp / 100));
+    runningVals.push(acc / 100);
   }
-  return { labels, values };
+  return { labels, incomeVals, expenseVals, runningVals };
 }
 
 /* Overview */
@@ -215,25 +226,47 @@ function renderOverview() {
   if (se) se.textContent = formatMoney(exp);
   if (sb) sb.textContent = formatMoney(bal);
 
-  // CHART: all-time daily running total
-  const { labels, values } = buildDailyRunningSeries(sortByDateAsc(state.transactions));
+  // CHART: bars (income/expense) + line (running total), one point per day across ALL time
+  const allSorted = sortByDateAsc(state.transactions);
+  const { labels, incomeVals, expenseVals, runningVals } = buildDailySeries(allSorted);
+
   const canvas = $('#monthChart'); if (!canvas) return;
   const ctx = canvas.getContext('2d');
   if (chart) chart.destroy();
+
   chart = new Chart(ctx, {
-    type: 'line',
     data: {
       labels: labels.length ? labels : ['No data'],
-      datasets: [{
-        label: 'Running Total (All Time)',
-        data: values.length ? values : [0],
-        borderColor: COLORS.balance.line,
-        backgroundColor: COLORS.balance.fill,
-        pointBackgroundColor: COLORS.balance.line,
-        borderWidth: 2,
-        tension: 0.25,
-        fill: true
-      }]
+      datasets: [
+        {
+          type: 'bar',
+          label: 'Income',
+          data: incomeVals.length ? incomeVals : [0],
+          backgroundColor: COLORS.income.fill,
+          borderColor: COLORS.income.line,
+          borderWidth: 1
+        },
+        {
+          type: 'bar',
+          label: 'Expenses',
+          data: expenseVals.length ? expenseVals : [0],
+          backgroundColor: COLORS.expense.fill,
+          borderColor: COLORS.expense.line,
+          borderWidth: 1
+        },
+        {
+          type: 'line',
+          label: 'Running Total (All Time)',
+          data: runningVals.length ? runningVals : [0],
+          borderColor: COLORS.balance.line,
+          backgroundColor: COLORS.balance.fill,
+          pointBackgroundColor: COLORS.balance.line,
+          borderWidth: 2,
+          tension: 0.25,
+          fill: true,
+          yAxisID: 'y'
+        }
+      ]
     },
     options: {
       responsive: true,
@@ -242,24 +275,30 @@ function renderOverview() {
         tooltip: {
           callbacks: {
             label: (ctx) => {
-              const val = ctx.parsed.y;
+              const v = ctx.parsed.y;
+              const name = ctx.dataset.label;
+              if (name === 'Income' || name === 'Expenses') {
+                return ` ${name}: ${moneyFmt.format(Math.abs(v))}`;
+              }
               const prev = ctx.dataIndex > 0 ? ctx.dataset.data[ctx.dataIndex - 1] : 0;
-              const change = val - prev;
-              return ` ${moneyFmt.format(val)}  (Δ ${moneyFmt.format(change)})`;
+              const delta = v - prev;
+              return ` ${name}: ${moneyFmt.format(v)} (Δ ${moneyFmt.format(delta)})`;
             }
           }
         }
       },
       scales: {
         x: { grid: { color: COLORS.axis.grid }, ticks: { color: COLORS.axis.text } },
-        y: { grid: { color: COLORS.axis.grid }, ticks: { color: COLORS.axis.text,
-          callback: (v) => moneyFmt.format(v) } }
+        y: {
+          grid: { color: COLORS.axis.grid },
+          ticks: { color: COLORS.axis.text, callback: (v) => moneyFmt.format(v) }
+        }
       }
     }
   });
 }
 
-/* Tables (respect cleared filter) */
+/* Tables (respect current/cleared filter) */
 function renderTable(kind) {
   const isIncome = (kind === 'Income');
   const body = isIncome ? $('#incomeTbody') : $('#expenseTbody');
@@ -344,7 +383,7 @@ if (expenseForm) expenseForm.addEventListener('submit', (e) => {
 });
 const expenseClear = $('#expenseClear'); if (expenseClear) expenseClear.addEventListener('click', () => clearForm('Expense'));
 
-/* Export / Import (unchanged) */
+/* Export / Import */
 function exportBackup() {
   try {
     const payload = { version: 1, exportedAt: new Date().toISOString(), data: state };
