@@ -197,19 +197,9 @@ function renderOverview() {
   if (se) se.textContent = formatMoney(exp);
   if (sb) sb.textContent = formatMoney(bal);
 
-  // Chart = ALL-TIME running total
-  var all = sortByDateAsc(state.transactions);
-  var labels = [];
-  var running = [];
-  var acc = 0;
-
-  for (var i = 0; i < all.length; i++) {
-    var t = all[i];
-    acc += (t.type === 'Income' ? +t.amountCents : -t.amountCents);
-    labels.push(t.date);
-    running.push(acc / 100);
-  }
-
+ // Chart = ALL-TIME running total, one point per day (daily sums)
+var { labels, values: running } = buildDailyRunningSeries(state.transactions);
+  
   var canvas = $('#monthChart'); if (!canvas) return;
   var ctx = canvas.getContext('2d');
   if (chart) chart.destroy();
@@ -234,14 +224,17 @@ function renderOverview() {
       responsive: true,
       plugins: {
         legend: { position: 'top', labels: { color: COLORS.axis.legend } },
-        tooltip: {
-          callbacks: {
-            label: function (ctx) {
-              var v = ctx.parsed.y;
-              return ' ' + moneyFmt.format(v);
-            }
-          }
-        }
+tooltip: {
+  callbacks: {
+    label: function (ctx) {
+      const val = ctx.parsed.y;
+      // Try to compute the day's change from previous point
+      const prev = ctx.dataIndex > 0 ? ctx.dataset.data[ctx.dataIndex - 1] : 0;
+      const change = val - prev;
+      return ` ${moneyFmt.format(val)}  (Δ ${moneyFmt.format(change)})`;
+    }
+  }
+}
       },
       scales: {
         x: { grid: { color: COLORS.axis.grid }, ticks: { color: COLORS.axis.text } },
@@ -479,6 +472,28 @@ function renderAll() {
   renderCategoryChips('Income');
   renderCategoryChips('Expense');
 
+  // Build daily running-total series (one point per day with that day's net sum)
+function buildDailyRunningSeries(allTx) {
+  // Sum deltas per date (income positive, expense negative)
+  const daily = new Map(); // date -> cents delta
+  for (const t of allTx) {
+    const delta = t.type === 'Income' ? +t.amountCents : -t.amountCents;
+    daily.set(t.date, (daily.get(t.date) || 0) + delta);
+  }
+
+  // Sort dates and accumulate
+  const dates = Array.from(daily.keys()).sort(); // ISO YYYY-MM-DD sorts naturally
+  const labels = [];
+  const values = []; // euros
+  let acc = 0;
+
+  for (const d of dates) {
+    acc += daily.get(d);
+    labels.push(d);
+    values.push(acc / 100);
+  }
+  return { labels, values };
+}
   renderOverview();
   renderTable('Income');
   renderTable('Expense');
