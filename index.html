@@ -12,7 +12,7 @@
   <link rel="apple-touch-icon" href="familybudget-icon-512x512-v3.png" />
 
   <style>
-    :root { --bg:#fff; --text:#1f2937; --muted:#6b7280; --soft:#e5e7eb; --brand:#F1952E; --brand2:#F6A034; }
+    :root { --bg:#fff; --text:#1f2937; --muted:#6b7280; --soft:#e5e7eb; --brand:#F1952E; --brand2:#F6A034; --danger:#b91c1c; }
     *{ box-sizing: border-box; }
     body { margin:0; font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; color:var(--text); background:var(--bg); }
     header { display:flex; align-items:center; justify-content:space-between; padding:16px; border-bottom:1px solid var(--soft); gap:12px; flex-wrap:wrap; }
@@ -41,13 +41,23 @@
     td.right { text-align:right; }
     .footer-actions { display:flex; gap:8px; margin-top:16px; }
     button { cursor:pointer; }
+
+    /* Envelopes grid */
+    .envelopes-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; }
+    .envelope-card { border:1px solid var(--soft); border-radius:12px; padding:12px; display:flex; gap:12px; align-items:center; background:#fff; }
+    .envelope-icon { font-size:24px; line-height:1; }
+    .envelope-meta { flex:1; min-width:0; }
+    .envelope-title { font-weight:600; }
+    .envelope-sub { font-size:12px; color:var(--muted); }
+    .tag-over { background:var(--danger); color:#fff; padding:2px 6px; border-radius:999px; font-size:11px; margin-left:6px; }
+
     @media (max-width:768px){ .cards { grid-template-columns:1fr; } }
   </style>
 
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
   <!-- App (cache-busted) -->
-  <script src="./app.js?v=13" defer></script>
+  <script src="./app.js?v=12" defer></script>
 </head>
 <body>
   <header>
@@ -64,6 +74,7 @@
     <button class="tab active" data-tab="overview">Overview</button>
     <button class="tab" data-tab="income">Income</button>
     <button class="tab" data-tab="expenses">Expenses</button>
+    <button class="tab" data-tab="envelopes">Spend per month</button>
   </div>
 
   <main>
@@ -151,6 +162,17 @@
           <tr><td colspan="2"><strong>Total</strong></td><td id="expenseTotal" class="right">€ 0,00</td><td colspan="2"></td></tr>
         </tfoot>
       </table>
+    </section>
+
+    <!-- SPEND PER MONTH (Envelopes) -->
+    <section id="tab-envelopes" class="panel">
+      <div class="row" style="justify-content:space-between; align-items:center;">
+        <div>
+          <strong>Spend per month</strong>
+          <div class="envelope-sub">Pick a month (or Clear month) above. Each envelope shows <em>average per month</em> and the selected month’s spend.</div>
+        </div>
+      </div>
+      <div id="envelopeGrid" class="envelopes-grid"></div>
     </section>
   </main>
 
