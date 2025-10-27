@@ -161,13 +161,27 @@
   </main>
 
   <!-- Register the Service Worker (relative for GitHub Pages subpath) -->
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./service-worker.js', { scope: './' })
-          .catch(console.error);
+  if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./service-worker.js').then(reg => {
+    // If a new SW is waiting to activate, make it take over now
+    if (reg.waiting) reg.waiting.postMessage('SKIP_WAITING');
+
+    // If a new SW is found (update available)
+    reg.addEventListener('updatefound', () => {
+      const sw = reg.installing;
+      if (!sw) return;
+      sw.addEventListener('statechange', () => {
+        if (sw.state === 'installed' && navigator.serviceWorker.controller) {
+          sw.postMessage('SKIP_WAITING');
+        }
       });
-    }
-  </script>
+    });
+  });
+
+  // When the new SW activates, reload to get fresh files
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    window.location.reload();
+  });
+}
 </body>
 </html>
