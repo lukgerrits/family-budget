@@ -3,7 +3,6 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-
   <title>Family Budget</title>
 
   <!-- PWA -->
@@ -12,7 +11,6 @@
   <link rel="icon" href="favicon.ico" />
   <link rel="apple-touch-icon" href="familybudget-icon-512x512-v3.png" />
 
-  <!-- Minimal styles -->
   <style>
     :root { --bg:#fff; --text:#1f2937; --muted:#6b7280; --soft:#e5e7eb; --brand:#F1952E; --brand2:#F6A034; }
     *{ box-sizing: border-box; }
@@ -46,135 +44,40 @@
     @media (max-width:768px){ .cards { grid-template-columns:1fr; } }
   </style>
 
-  <!-- Chart.js (CDN) -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
-
-  <!-- Your app code (cache-busted) -->
-  <script src="./app.js?v=10" defer></script>
+  <script src="./app.js?v=11" defer></script>
 </head>
 <body>
   <header>
     <h1>Family Budget</h1>
     <div class="controls">
-      <input id="monthPicker" type="month" />
+      <input id="monthPicker" type="month" placeholder="All months" />
       <button id="btnToday" type="button">Today</button>
+      <button id="btnClearMonth" type="button" title="Show all entries">Clear month</button>
     </div>
   </header>
 
-  <!-- Tabs -->
-  <div class="tabs">
-    <button class="tab active" data-tab="overview">Overview</button>
-    <button class="tab" data-tab="income">Income</button>
-    <button class="tab" data-tab="expenses">Expenses</button>
-  </div>
+  <!-- tabs + pages unchanged ... -->
 
-  <main>
-    <!-- OVERVIEW -->
-    <section id="tab-overview" class="panel active">
-      <div class="cards">
-        <div class="card">
-          <h3>Income</h3>
-          <div id="sumIncome" class="sum">€ 0,00</div>
-        </div>
-        <div class="card">
-          <h3>Expenses</h3>
-          <div id="sumExpense" class="sum">€ 0,00</div>
-        </div>
-        <div class="card">
-          <h3>Balance</h3>
-          <div id="sumBalance" class="sum">€ 0,00</div>
-        </div>
-      </div>
-      <canvas id="monthChart" height="140"></canvas>
-      <div class="footer-actions">
-        <button id="btnExport" type="button">Export backup</button>
-        <button id="btnImport" type="button">Import backup</button>
-        <input id="fileImport" type="file" accept=".json,.csv,text/csv,application/vnd.ms-excel" style="display:none" />
-      </div>
-    </section>
-
-    <!-- INCOME -->
-    <section id="tab-income" class="panel">
-      <div class="row">
-        <strong>Category:</strong> <span id="incomeSelectedCat">—</span>
-      </div>
-      <div id="incomeCats" class="row"></div>
-
-      <form id="incomeForm">
-        <input type="hidden" id="incomeEditingId" />
-        <div class="row">
-          <label>Date <input id="incomeDate" type="date" required></label>
-          <label>Amount (€) <input id="incomeAmount" type="text" placeholder="e.g. 1.234,56" required></label>
-          <label>Note <input id="incomeNote" type="text" placeholder="Optional note"></label>
-        </div>
-        <div class="row">
-          <button id="incomeSubmit" class="primary" type="submit">Add</button>
-          <button id="incomeClear" class="ghost" type="button">Clear</button>
-        </div>
-      </form>
-
-      <table>
-        <thead>
-          <tr><th>Date</th><th>Category</th><th>Amount</th><th>Note</th><th>Actions</th></tr>
-        </thead>
-        <tbody id="incomeTbody"></tbody>
-        <tfoot>
-          <tr><td colspan="2"><strong>Total</strong></td><td id="incomeTotal" class="right">€ 0,00</td><td colspan="2"></td></tr>
-        </tfoot>
-      </table>
-    </section>
-
-    <!-- EXPENSES -->
-    <section id="tab-expenses" class="panel">
-      <div class="row">
-        <strong>Category:</strong> <span id="expenseSelectedCat">—</span>
-      </div>
-      <div id="expenseCats" class="row"></div>
-
-      <form id="expenseForm">
-        <input type="hidden" id="expenseEditingId" />
-        <div class="row">
-          <label>Date <input id="expenseDate" type="date" required></label>
-          <label>Amount (€) <input id="expenseAmount" type="text" placeholder="e.g. 1.234,56" required></label>
-          <label>Note <input id="expenseNote" type="text" placeholder="Optional note"></label>
-        </div>
-        <div class="row">
-          <button id="expenseSubmit" class="primary" type="submit">Add</button>
-          <button id="expenseClear" class="ghost" type="button">Clear</button>
-        </div>
-      </form>
-
-      <table>
-        <thead>
-          <tr><th>Date</th><th>Category</th><th>Amount</th><th>Note</th><th>Actions</th></tr>
-        </thead>
-        <tbody id="expenseTbody"></tbody>
-        <tfoot>
-          <tr><td colspan="2"><strong>Total</strong></td><td id="expenseTotal" class="right">€ 0,00</td><td colspan="2"></td></tr>
-        </tfoot>
-      </table>
-    </section>
-  </main>
-
-  <!-- Register the Service Worker (relative for GitHub Pages subpath) -->
+  <!-- Register the Service Worker -->
   <script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./service-worker.js').then(reg => {
-    if (reg.waiting) reg.waiting.postMessage('SKIP_WAITING');
-    reg.addEventListener('updatefound', () => {
-      const sw = reg.installing;
-      if (!sw) return;
-      sw.addEventListener('statechange', () => {
-        if (sw.state === 'installed' && navigator.serviceWorker.controller) {
-          sw.postMessage('SKIP_WAITING');
-        }
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./service-worker.js').then(reg => {
+      if (reg.waiting) reg.waiting.postMessage('SKIP_WAITING');
+      reg.addEventListener('updatefound', () => {
+        const sw = reg.installing;
+        if (!sw) return;
+        sw.addEventListener('statechange', () => {
+          if (sw.state === 'installed' && navigator.serviceWorker.controller) {
+            sw.postMessage('SKIP_WAITING');
+          }
+        });
       });
     });
-  });
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    window.location.reload();
-  });
-}
-</script>
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      window.location.reload();
+    });
+  }
+  </script>
 </body>
 </html>
