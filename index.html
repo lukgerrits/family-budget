@@ -161,7 +161,7 @@
   </main>
 
   <!-- Register the Service Worker (relative for GitHub Pages subpath) -->
-  if ('serviceWorker' in navigator) {
+  <script>if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./service-worker.js').then(reg => {
     // If a new SW is waiting to activate, make it take over now
     if (reg.waiting) reg.waiting.postMessage('SKIP_WAITING');
@@ -183,5 +183,6 @@
     window.location.reload();
   });
 }
+  </script>
 </body>
 </html>
