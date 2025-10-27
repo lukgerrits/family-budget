@@ -5,7 +5,7 @@
  * - Stale-while-revalidate for static assets (CSS, images, manifest)
  */
 
-const VERSION = 'v1.0.5'; // ⬅️ bump this on every deploy
+const VERSION = 'v1.0.6'; // ⬅️ bump this on every deploy
 const PRECACHE = `family-budget-precache-${VERSION}`;
 const RUNTIME  = `family-budget-runtime-${VERSION}`;
 
@@ -40,13 +40,11 @@ self.addEventListener('install', (event) => {
 /* ---------------- ACTIVATE ---------------- */
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
-    // Delete old caches
     const names = await caches.keys();
     await Promise.all(names
       .filter((n) => n !== PRECACHE && n !== RUNTIME)
       .map((n) => caches.delete(n)));
 
-    // Enable navigation preload if available
     if (self.registration.navigationPreload) {
       try { await self.registration.navigationPreload.enable(); } catch {}
     }
@@ -68,7 +66,7 @@ self.addEventListener('fetch', (event) => {
   const isHTML = req.mode === 'navigate' ||
     (req.headers.get('accept') || '').includes('text/html');
 
-  /* ----------- 1️⃣ HTML: network-first ----------- */
+  // 1) HTML: network-first
   if (isHTML) {
     event.respondWith((async () => {
       try {
@@ -77,7 +75,6 @@ self.addEventListener('fetch', (event) => {
           caches.open(PRECACHE).then(c => c.put(p('index.html'), preload.clone())).catch(()=>{});
           return preload;
         }
-
         const net = await fetch(req, { cache: 'no-store' });
         caches.open(PRECACHE).then(c => c.put(p('index.html'), net.clone())).catch(()=>{});
         return net;
@@ -89,7 +86,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  /* ----------- 2️⃣ JS: always fetch fresh ----------- */
+  // 2) JS: always fetch fresh
   if (req.destination === 'script' || url.pathname.endsWith('.js')) {
     event.respondWith((async () => {
       try {
@@ -102,7 +99,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  /* ----------- 3️⃣ Other assets: stale-while-revalidate ----------- */
+  // 3) Other assets: stale-while-revalidate
   event.respondWith((async () => {
     const cache = await caches.open(RUNTIME);
     const cached = await cache.match(req);
