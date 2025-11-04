@@ -1,10 +1,11 @@
 // ========================================================
-// Family Budget - app.js (v13)
+// Family Budget - app.js (v14)
+// - Permanent storage key (no more version bumps losing data)
+// - Auto-migrate from v5/v4/v3 into permanent key
+// - Rolling auto-backups (last 7) in localStorage
 // - Month filter can be cleared (shows ALL entries)
 // - Overview: bars (Income/Expenses per day) + line (Running total, all time) with dual axes
-// - Envelopes tab: per-category monthly BUDGETS (editable), donut fills with selected-month spend
-//   * If no budget set, uses avg per month as cap
-//   * "Use averages for all" button to prefill budgets
+// - Envelopes tab: monthly budgets per expense category (editable) with “Use averages for all”
 // ========================================================
 
 var $ = (sel) => document.querySelector(sel);
@@ -25,10 +26,14 @@ function parseMoneyToCents(str) {
 function today() { return new Date(); }
 function toYM(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
 
-/* State */
-const STORAGE_KEY = 'family-budget/v5'; // bump for budgets schema
+/* ---------- Storage (permanent key + migration + backups) ---------- */
+const MAIN_KEY = 'family-budget/main';
+const LEGACY_KEYS = ['family-budget/v5', 'family-budget/v4', 'family-budget/v3'];
+const BACKUPS_KEY = 'family-budget/autobackups';
+
 function defaultState() {
   return {
+    version: 1,
     selectedMonth: toYM(today()),        // null = ALL
     categories: {
       Income: ['Cash','Huur','Kinderbijslag','Andere'],
@@ -38,24 +43,64 @@ function defaultState() {
     transactions: [] // {id,type,date,category,amountCents,note}
   };
 }
+function normalizeState(s) {
+  if (!s || typeof s !== 'object') return defaultState();
+  if (!('version' in s)) s.version = 1;
+  if (!('selectedMonth' in s)) s.selectedMonth = toYM(today());
+  if (!s.categories || typeof s.categories !== 'object') s.categories = { Income: [], Expense: [] };
+  if (!Array.isArray(s.categories.Income)) s.categories.Income = [];
+  if (!Array.isArray(s.categories.Expense)) s.categories.Expense = [];
+  if (!Array.isArray(s.transactions)) s.transactions = [];
+  if (!s.budgets || typeof s.budgets !== 'object') s.budgets = { Expense: {} };
+  if (!s.budgets.Expense || typeof s.budgets.Expense !== 'object') s.budgets.Expense = {};
+  return s;
+}
+function migrateLegacy() {
+  for (const k of LEGACY_KEYS) {
+    const raw = localStorage.getItem(k);
+    if (raw) {
+      try {
+        const migrated = normalizeState(JSON.parse(raw) || {});
+        localStorage.setItem(MAIN_KEY, JSON.stringify(migrated));
+        return migrated;
+      } catch {}
+    }
+  }
+  return null;
+}
 function loadState() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return defaultState();
-    const s = JSON.parse(raw) || {};
-    if (!('selectedMonth' in s)) s.selectedMonth = toYM(today());
-    if (!s.categories || typeof s.categories !== 'object') s.categories = { Income: [], Expense: [] };
-    if (!Array.isArray(s.categories.Income)) s.categories.Income = [];
-    if (!Array.isArray(s.categories.Expense)) s.categories.Expense = [];
-    if (!Array.isArray(s.transactions)) s.transactions = [];
-    if (!s.budgets || typeof s.budgets !== 'object') s.budgets = { Expense: {} };
-    if (!s.budgets.Expense || typeof s.budgets.Expense !== 'object') s.budgets.Expense = {};
+    let raw = localStorage.getItem(MAIN_KEY);
+    if (!raw) {
+      const migrated = migrateLegacy();
+      if (migrated) return migrated;
+      return defaultState();
+    }
+    const s = normalizeState(JSON.parse(raw) || {});
     return s;
-  } catch { return defaultState(); }
+  } catch {
+    return defaultState();
+  }
 }
-function saveState() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+function saveState() {
+  localStorage.setItem(MAIN_KEY, JSON.stringify(state));
+  // rolling auto-backups (keep last 7)
+  try {
+    const arr = JSON.parse(localStorage.getItem(BACKUPS_KEY) || '[]');
+    arr.unshift({ at: new Date().toISOString(), data: state });
+    localStorage.setItem(BACKUPS_KEY, JSON.stringify(arr.slice(0, 7)));
+  } catch {}
+}
 
 let state = loadState();
+
+/* If selected month has no entries but data exists, jump to latest populated month */
+if (state.transactions.length &&
+    (!state.selectedMonth ||
+     !state.transactions.some(t => (t.date || '').slice(0,7) === state.selectedMonth))) {
+  const months = Array.from(new Set(state.transactions.map(t => (t.date||'').slice(0,7)).filter(Boolean))).sort();
+  if (months.length) { state.selectedMonth = months[months.length - 1]; saveState(); }
+}
 
 /* Tabs */
 const tabs = Array.from(document.querySelectorAll('.tabs .tab'));
@@ -205,7 +250,7 @@ function buildDailySeries(allTx) {
     acc += inc - exp;
     labels.push(d);
     incomeVals.push(inc/100);
-    expenseVals.push(-(exp/100)); // negative bars
+    expenseVals.push(-(exp/100)); // negative bars (visually distinct)
     runningVals.push(acc/100);
   }
   return { labels, incomeVals, expenseVals, runningVals };
