@@ -428,8 +428,15 @@ function renderEnvelopes() {
     const donut=new Chart(ctx,{
       type:'doughnut',
       data:{ labels:['Spent','Remaining'],
-        datasets:[{ data:[within/100, remain/100],
-          backgroundColor:[COLORS.expense.line, 'rgba(17,24,39,0.08)'], borderWidth:0 }] },
+        const ctx=canvas.getContext('2d');
+const donut=new Chart(ctx,{
+  type:'doughnut',
+  data:{ labels:['Spent','Remaining'],
+    datasets:[{ data:[within/100, remain/100],
+      backgroundColor:[COLORS.expense.line, 'rgba(17,24,39,0.08)'], borderWidth:0 }] },
+  options:{ cutout:'70%', plugins:{ legend:{display:false},
+    tooltip:{ callbacks:{ label:(c)=>` ${c.label}: ${moneyFmt.format(c.parsed)}` } } } }
+}); },
       options:{ cutout:'70%', plugins:{ legend:{display:false},
         tooltip:{ callbacks:{ label:(c)=>` ${c.label}: ${moneyFmt.format(c.parsed)}` } } } }
     });
