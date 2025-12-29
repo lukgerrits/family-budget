@@ -1,5 +1,5 @@
 // ========================================================
-// Family Budget - app.js (v16)
+// Family Budget - app.js (v17)
 // - Permanent storage key (no more version bumps losing data)
 // - Auto-migrate from v5/v4/v3 into permanent key
 // - Rolling auto-backups (last 7) in localStorage
