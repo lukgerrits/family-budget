@@ -1,5 +1,5 @@
 // ========================================================
-// Family Budget - app.js (v20)
+// Family Budget - app.js (v21)
 // - Permanent storage key (no more version bumps losing data)
 // - Auto-migrate from v5/v4/v3 into permanent key
 // - Rolling auto-backups (last 7) in localStorage
@@ -428,47 +428,46 @@ function renderEnvelopes() {
     card.appendChild(donutWrap); card.appendChild(meta);
     grid.appendChild(card);
 
-    // ------------------------
-    // Donut split:
-    //   Green = spend up to avg
-    //   Red   = spend above avg
-    //   Grey  = remaining to budget
-    // (Ring is capped at budget, like before)
-    // ------------------------
-    const cap = Math.max(budgetCents, 0);
-    const avgCap = Math.min(avgCents, cap);
+// ------------------------
+// Donut split vs BUDGET:
+//   Green = up to budget
+//   Red   = over budget
+//   Grey  = remaining under budget
+// ------------------------
+const budget = Math.max(budgetCents, 0);
+const spent = Math.max(spentCents, 0); // this is your avg/month
 
-    const withinAvg = Math.min(spentCents, avgCap);
-    const overAvg = Math.min(Math.max(spentCents - avgCap, 0), Math.max(cap - avgCap, 0));
-    const remaining = Math.max(cap - withinAvg - overAvg, 0);
+const withinBudget = Math.min(spent, budget);
+const overBudget = Math.max(spent - budget, 0);
+const remaining = Math.max(budget - spent, 0);
 
-    const ctx = canvas.getContext('2d');
-    const donut = new Chart(ctx, {
-      type: 'doughnut',
-      data: {
-        labels: ['Within avg', 'Over avg', 'Remaining'],
-        datasets: [{
-          data: [withinAvg/100, overAvg/100, remaining/100],
-          backgroundColor: [
-            COLORS.income.line,      // green
-            '#D64545',               // red
-            'rgba(17,24,39,0.08)'    // grey
-          ],
-          borderWidth: 0
-        }]
-      },
-      options: {
-        cutout: '70%',
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: { label: (c) => ` ${c.label}: ${moneyFmt.format(c.parsed)}` }
-          }
-        }
+const ctx = canvas.getContext('2d');
+const donut = new Chart(ctx, {
+  type: 'doughnut',
+  data: {
+    labels: ['Within budget', 'Over budget', 'Remaining'],
+    datasets: [{
+      data: [withinBudget/100, overBudget/100, remaining/100],
+      backgroundColor: [
+        COLORS.income.line,      // green
+        '#D64545',               // red
+        'rgba(17,24,39,0.08)'    // grey
+      ],
+      borderWidth: 0
+    }]
+  },
+  options: {
+    cutout: '70%',
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: { label: (c) => ` ${c.label}: ${moneyFmt.format(c.parsed)}` }
       }
-    });
+    }
+  }
+});
 
-    envelopeCharts.push(donut);
+envelopeCharts.push(donut);
   });
 }
 
