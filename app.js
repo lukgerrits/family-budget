@@ -1,13 +1,13 @@
 // ========================================================
-// Family Budget - app.js (v19)
+// Family Budget - app.js (v20)
 // - Permanent storage key (no more version bumps losing data)
 // - Auto-migrate from v5/v4/v3 into permanent key
 // - Rolling auto-backups (last 7) in localStorage
 // - Month filter can be cleared (shows ALL entries)
 // - Overview: bars (Income/Expenses per day) + line (Running total, all time) with dual axes
 // - Envelopes tab:
-//    - shows prorated average spend per category (31-day month)
-//    - donut spent slice changes color when over budget
+//    - shows prorated average spend per category (31-day month) as "Avg spent / month"
+//    - donut split: green up to avg, red over avg, grey remaining to budget
 //    - budgets editable + “Use averages for all”
 // ========================================================
 
@@ -327,7 +327,7 @@ function sumExpensesByCategory(month /* null=all */) {
 }
 
 /**
- * ✅ Prorated average to a 31-day month:
+ * Prorated average to a 31-day month:
  * avg31 = (total cents / total days covered) * 31
  * day coverage = from first expense date to last expense date (inclusive)
  */
@@ -335,18 +335,17 @@ function averageExpensesPerMonthByCategory() {
   const txs = state.transactions.filter(t => t.type === 'Expense' && t.date);
   if (!txs.length) return new Map();
 
-  // Determine date range (inclusive)
-  const dates = txs.map(t => new Date(t.date));
-  const minDate = new Date(Math.min.apply(null, dates));
-  const maxDate = new Date(Math.max.apply(null, dates));
+  const timestamps = txs.map(t => new Date(t.date).getTime()).filter(n => Number.isFinite(n));
+  if (!timestamps.length) return new Map();
+
+  const minDate = new Date(Math.min.apply(null, timestamps));
+  const maxDate = new Date(Math.max.apply(null, timestamps));
 
   const MS_PER_DAY = 24 * 60 * 60 * 1000;
   const dayCount = Math.max(Math.round((maxDate - minDate) / MS_PER_DAY) + 1, 1);
 
-  // Total expense per category (all time)
   const totals = sumExpensesByCategory(null);
 
-  // Prorated average per 31-day month
   const avg = new Map();
   for (const [cat, cents] of totals.entries()) {
     const perDay = cents / dayCount;
@@ -371,11 +370,9 @@ $('#btnBudgetsFromAvg')?.addEventListener('click', useAveragesForAllBudgets);
 function renderEnvelopes() {
   const grid = $('#envelopeGrid'); if (!grid) return;
 
-  // cleanup old charts
   envelopeCharts.forEach(ch=>{ try{ ch.destroy(); }catch{} });
   envelopeCharts=[];
 
-  // ✅ Envelopes show prorated average spend (31-day month)
   const avg = averageExpensesPerMonthByCategory();
   const spentMap = avg;
 
@@ -391,7 +388,7 @@ function renderEnvelopes() {
   cats.forEach(cat=>{
     const avgCents = avg.get(cat)||0;
     const budgetCents = (state.budgets.Expense[cat] ?? 0) || avgCents; // fallback to avg
-    const spentCents = spentMap.get(cat)||0; // avg/month (31-day) now
+    const spentCents = spentMap.get(cat)||0;
 
     const card = document.createElement('div'); card.className='envelope-card';
 
@@ -400,6 +397,7 @@ function renderEnvelopes() {
       const tag=document.createElement('div'); tag.className='over-tag'; tag.textContent='OVER';
       donutWrap.appendChild(tag);
     }
+
     const canvas=document.createElement('canvas'); canvas.width=120; canvas.height=120; donutWrap.appendChild(canvas);
 
     const meta = document.createElement('div'); meta.className='env-meta';
@@ -409,7 +407,7 @@ function renderEnvelopes() {
     line1.innerHTML = `Budget: <span class="env-strong">${formatMoney(budgetCents)}</span>`;
 
     const line2=document.createElement('div'); line2.className='env-line';
-    const delta = budgetCents - spentCents; // + under on avg, - over on avg
+    const delta = budgetCents - spentCents;
     line2.innerHTML =
       `Avg spent / month: <span class="env-strong">${formatMoney(spentCents)}</span> • ` +
       `${delta >= 0 ? 'Avg under' : 'Avg over'}: <span class="env-strong">${formatMoney(Math.abs(delta))}</span>`;
@@ -427,25 +425,35 @@ function renderEnvelopes() {
     controls.appendChild(input); controls.appendChild(btnAvg);
 
     meta.appendChild(title); meta.appendChild(line1); meta.appendChild(line2); meta.appendChild(controls);
+    card.appendChild(donutWrap); card.appendChild(meta);
+    grid.appendChild(card);
 
-    card.appendChild(donutWrap); card.appendChild(meta); grid.appendChild(card);
-
-    // Donut (avg spent vs remaining up to budget)
+    // ------------------------
+    // Donut split:
+    //   Green = spend up to avg
+    //   Red   = spend above avg
+    //   Grey  = remaining to budget
+    // (Ring is capped at budget, like before)
+    // ------------------------
     const cap = Math.max(budgetCents, 0);
-    const within = Math.min(spentCents, cap);
-    const remain = Math.max(cap - within, 0);
+    const avgCap = Math.min(avgCents, cap);
 
-    // 🔴 Different color for spent slice when OVER budget
-    const spentColor = (spentCents > budgetCents) ? '#D64545' : COLORS.expense.line;
+    const withinAvg = Math.min(spentCents, avgCap);
+    const overAvg = Math.min(Math.max(spentCents - avgCap, 0), Math.max(cap - avgCap, 0));
+    const remaining = Math.max(cap - withinAvg - overAvg, 0);
 
     const ctx = canvas.getContext('2d');
     const donut = new Chart(ctx, {
       type: 'doughnut',
       data: {
-        labels: ['Spent', 'Remaining'],
+        labels: ['Within avg', 'Over avg', 'Remaining'],
         datasets: [{
-          data: [within/100, remain/100],
-          backgroundColor: [spentColor, 'rgba(17,24,39,0.08)'],
+          data: [withinAvg/100, overAvg/100, remaining/100],
+          backgroundColor: [
+            COLORS.income.line,      // green
+            '#D64545',               // red
+            'rgba(17,24,39,0.08)'    // grey
+          ],
           borderWidth: 0
         }]
       },
@@ -510,15 +518,11 @@ function beginEdit(kind,id){
   if(kind==='Income'){
     selectedIncomeCat=t.category||null; $('#incomeSelectedCat').textContent=selectedIncomeCat||'—';
     renderCategoryChips('Income');
-    $('#incomeEditingId').value=t.id; $('#incomeDate').value=t.date;
-    $('#incomeAmount').value=(t.amountCents/100).toString().replace('.',','); $('#incomeNote').value=t.note||'';
-    $('#incomeSubmit').textContent='Save';
+    $('#incomeEditingId').value=t.id; $('#incomeDate').value=t.date; $('#incomeAmount').value=(t.amountCents/100).toString().replace('.',','); $('#incomeNote').value=t.note||''; $('#incomeSubmit').textContent='Save';
   }else{
     selectedExpenseCat=t.category||null; $('#expenseSelectedCat').textContent=selectedExpenseCat||'—';
     renderCategoryChips('Expense');
-    $('#expenseEditingId').value=t.id; $('#expenseDate').value=t.date;
-    $('#expenseAmount').value=(t.amountCents/100).toString().replace('.',','); $('#expenseNote').value=t.note||'';
-    $('#expenseSubmit').textContent='Save';
+    $('#expenseEditingId').value=t.id; $('#expenseDate').value=t.date; $('#expenseAmount').value=(t.amountCents/100).toString().replace('.',','); $('#expenseNote').value=t.note||''; $('#expenseSubmit').textContent='Save';
   }
 }
 
