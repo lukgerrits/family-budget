@@ -350,9 +350,9 @@ function renderEnvelopes() {
   envelopeCharts.forEach(ch=>{ try{ ch.destroy(); }catch{} });
   envelopeCharts=[];
 
-  const month = state.selectedMonth || toYM(today()); // show something even if cleared
+  // ✅ Average spend per month by category (this is now what we show as “spent”)
   const avg = averageExpensesPerMonthByCategory();
-  const spentMap = sumExpensesByCategory(month);
+  const spentMap = avg;
 
   const cats = Array.from(new Set([...(state.categories.Expense||[]), ...avg.keys(), ...Object.keys(state.budgets.Expense), ...spentMap.keys()]));
 
@@ -361,7 +361,7 @@ function renderEnvelopes() {
   cats.forEach(cat=>{
     const avgCents = avg.get(cat)||0;
     const budgetCents = (state.budgets.Expense[cat] ?? 0) || avgCents; // fallback to avg
-    const spentCents = spentMap.get(cat)||0;
+    const spentCents = spentMap.get(cat)||0; // avg/month now
 
     const card = document.createElement('div'); card.className='envelope-card';
 
@@ -376,8 +376,13 @@ function renderEnvelopes() {
     const title=document.createElement('div'); title.className='env-title'; title.textContent=cat||'—';
     const line1=document.createElement('div'); line1.className='env-line';
     line1.innerHTML = `Budget: <span class="env-strong">${formatMoney(budgetCents)}</span>`;
+
+    // ✅ Replace “YYYY-MM spent / Remaining” with average messaging
     const line2=document.createElement('div'); line2.className='env-line';
-    line2.innerHTML = `${month} spent: <span class="env-strong">${formatMoney(spentCents)}</span> • Remaining: <span class="env-strong">${formatMoney(Math.max(budgetCents-spentCents,0))}</span>`;
+    const delta = budgetCents - spentCents; // + under on avg, - over on avg
+    line2.innerHTML =
+      `Avg spent / month: <span class="env-strong">${formatMoney(spentCents)}</span> • ` +
+      `${delta >= 0 ? 'Avg under' : 'Avg over'}: <span class="env-strong">${formatMoney(Math.abs(delta))}</span>`;
 
     const controls=document.createElement('div'); controls.className='env-controls';
     const input=document.createElement('input'); input.type='text'; input.className='budget-input';
@@ -394,7 +399,7 @@ function renderEnvelopes() {
 
     card.appendChild(donutWrap); card.appendChild(meta); grid.appendChild(card);
 
-    // Build donut (spent vs remaining up to budget)
+    // Build donut (avg spent vs remaining up to budget)
     const cap = Math.max(budgetCents, 0);
     const within = Math.min(spentCents, cap);
     const remain = Math.max(cap - within, 0);
