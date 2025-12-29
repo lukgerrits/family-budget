@@ -1,5 +1,5 @@
 // ========================================================
-// Family Budget - app.js (v17)
+// Family Budget - app.js (v18)
 // - Permanent storage key (no more version bumps losing data)
 // - Auto-migrate from v5/v4/v3 into permanent key
 // - Rolling auto-backups (last 7) in localStorage
@@ -428,15 +428,39 @@ function renderEnvelopes() {
     const donut=new Chart(ctx,{
       type:'doughnut',
       data:{ labels:['Spent','Remaining'],
-        const ctx=canvas.getContext('2d');
-const donut=new Chart(ctx,{
-  type:'doughnut',
-  data:{ labels:['Spent','Remaining'],
-    datasets:[{ data:[within/100, remain/100],
-      backgroundColor:[COLORS.expense.line, 'rgba(17,24,39,0.08)'], borderWidth:0 }] },
-  options:{ cutout:'70%', plugins:{ legend:{display:false},
-    tooltip:{ callbacks:{ label:(c)=>` ${c.label}: ${moneyFmt.format(c.parsed)}` } } } }
-}); },
+        const ctx = canvas.getContext('2d');
+
+// 🔴 Use warning color when average spend exceeds budget
+const spentColor =
+  spentCents > budgetCents
+    ? '#D64545'               // over budget (strong red)
+    : COLORS.expense.line;    // within budget
+
+const donut = new Chart(ctx, {
+  type: 'doughnut',
+  data: {
+    labels: ['Spent', 'Remaining'],
+    datasets: [{
+      data: [within / 100, remain / 100],
+      backgroundColor: [
+        spentColor,
+        'rgba(17,24,39,0.08)'
+      ],
+      borderWidth: 0
+    }]
+  },
+  options: {
+    cutout: '70%',
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: (c) => ` ${c.label}: ${moneyFmt.format(c.parsed)}`
+        }
+      }
+    }
+  }
+});},
       options:{ cutout:'70%', plugins:{ legend:{display:false},
         tooltip:{ callbacks:{ label:(c)=>` ${c.label}: ${moneyFmt.format(c.parsed)}` } } } }
     });
