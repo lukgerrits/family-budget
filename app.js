@@ -323,10 +323,30 @@ function sumExpensesByCategory(month /* null=all */) {
   return map;
 }
 function averageExpensesPerMonthByCategory() {
-  const mCount = monthsCount();
-  const total = sumExpensesByCategory(null);
+  const txs = state.transactions.filter(t => t.type === 'Expense' && t.date);
+  if (!txs.length) return new Map();
+
+  // Determine date range (inclusive)
+  const dates = txs.map(t => new Date(t.date));
+  const minDate = new Date(Math.min(...dates));
+  const maxDate = new Date(Math.max(...dates));
+
+  const MS_PER_DAY = 24 * 60 * 60 * 1000;
+  const dayCount = Math.max(
+    Math.round((maxDate - minDate) / MS_PER_DAY) + 1,
+    1
+  );
+
+  // Total expense per category (all time)
+  const totals = sumExpensesByCategory(null);
+
+  // Prorated average per 31-day month
   const avg = new Map();
-  for (const [k,cents] of total.entries()) avg.set(k, Math.round(cents/mCount));
+  for (const [cat, cents] of totals.entries()) {
+    const perDay = cents / dayCount;
+    avg.set(cat, Math.round(perDay * 31));
+  }
+
   return avg;
 }
 
